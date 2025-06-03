@@ -245,13 +245,14 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     /**
      * Creates a new RTCPeerConnection instance.
      *
-     * @param array|RTCConfiguration|null $configuration Configuration options for the connection
+     * @param array|RTCConfigurationInterface $configuration Configuration options for the connection
+     * @throws DateInvalidOperationException If there's an SSL-related error
+     * @throws OpenSSLException If there's an SSL-related error
      * @throws RTCCertificateException If certificate generation fails
-     * @throws OpenSSLException|DateInvalidOperationException If there's an SSL-related error
      */
-    public function __construct(null|array|RTCConfigurationInterface $configuration = null)
+    public function __construct(array|RTCConfigurationInterface $configuration = [])
     {
-        $this->configuration = $configuration instanceof RTCConfigurationInterface ? $configuration : new RTCConfiguration($configuration);
+        $this->configuration = $configuration instanceof RTCConfigurationInterface ? $configuration : RTCConfiguration::parseConfiguration($configuration);
         $this->certificates[] = new RTCCertificate($this->configuration->getPrivateKeyPath(), $this->configuration->getCertificatePath());
         $this->cname = Uuid::uuid4()->toString();
         $this->streamId = Uuid::uuid4()->toString();

@@ -55,17 +55,18 @@ class RTCConfiguration implements RTCConfigurationInterface
     /**
      * Constructs a new RTCConfiguration instance
      *
-     * @param array|null $configuration Optional configuration array. If null,
-     *        default configuration with a Google STUN server will be used.
-     *        Expected keys:
-     *        - 'iceServers': Array of ICE server configurations
-     *        - 'certificatePath': Path to a certificate file (optional)
-     *        - 'privateKeyPath': Path to a private key file (optional)
-     * @throws InvalidArgumentException If iceServer configuration is invalid
+     * @param array<RTCIceServerInterface> $iceServers
+     * @param string|null $certificatePath
+     * @param string|null $privateKeyPath
      */
-    public function __construct(?array $configuration = null)
-    {
-        $configuration !== null ? $this->parseConfiguration($configuration) : $this->getDefaultConfiguration();
+    public function __construct(
+        array $iceServers = [],
+        ?string $certificatePath = null,
+        ?string $privateKeyPath = null
+    ) {
+        $this->iceServers = empty($iceServers) ? $this->getDefaultIceServer() : $iceServers;
+        $this->certificatePath = $certificatePath;
+        $this->privateKeyPath = $privateKeyPath;
     }
 
     /**
@@ -149,11 +150,11 @@ class RTCConfiguration implements RTCConfigurationInterface
      *        - 'iceServers': Array of ICE server configurations (required if present)
      *        - 'certificatePath': Path to a certificate file (optional)
      *        - 'privateKeyPath': Path to a private key file (optional)
-     * @return void
-     * @throws InvalidArgumentException If iceServer configuration is missing required 'urls' key
+     * @return RTCConfiguration
      */
-    private function parseConfiguration(array $configuration): void
+    public static function parseConfiguration(array $configuration): self
     {
+        $iceServers = [];
         if (isset($configuration['iceServers'])) {
             foreach ($configuration["iceServers"] as $iceServer) {
                 if (!isset($iceServer["urls"])) {
@@ -166,23 +167,28 @@ class RTCConfiguration implements RTCConfigurationInterface
                 $iceServerObj->setCredential($iceServer["credential"] ?? null);
                 $iceServerObj->setCredentialType($iceServer["credentialType"] ?? null);
 
-                $this->addIceServer($iceServerObj);
+                $iceServers[] = $iceServerObj;
             }
+        }else{
+            $iceServers = (new RTCConfiguration)->getDefaultIceServer();
         }
 
-        $this->certificatePath = $configuration["certificatePath"] ?? null;
-        $this->privateKeyPath = $configuration["privateKeyPath"] ?? null;
+        $certificatePath = $configuration["certificatePath"] ?? null;
+        $privateKeyPath = $configuration["privateKeyPath"] ?? null;
+
+        return new static($iceServers, $certificatePath, $privateKeyPath);
     }
 
     /**
-     * Sets up default configuration with Google's public STUN server
+     * return the default ice configuration with Google's public STUN server
      *
-     * @return void
+     * @return array<RTCIceServer>
      */
-    private function getDefaultConfiguration(): void
+    private function getDefaultIceServer(): array
     {
         $iceServer  = new RTCIceServer();
         $iceServer->setUrls([self::DEFAULT_STUN_SERVER]);
-        $this->addIceServer($iceServer);
+
+        return [$iceServer];
     }
 }
