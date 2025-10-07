@@ -12,6 +12,7 @@
 namespace Webrtc\Webrtc;
 
 use Webrtc\Exception\InvalidArgumentException;
+use Webrtc\ICE\Enum\TransportPolicyType;
 use Webrtc\ICE\RTCIceServer;
 use Webrtc\ICE\RTCIceServerInterface;
 
@@ -52,21 +53,23 @@ class RTCConfiguration implements RTCConfigurationInterface
      */
     private ?string $privateKeyPath = null;
 
+    private ?array $icePortRange = null;
+    private ?TransportPolicyType $transportPolicy = null;
+
     /**
      * Constructs a new RTCConfiguration instance
      *
-     * @param array<RTCIceServerInterface> $iceServers
-     * @param string|null $certificatePath
-     * @param string|null $privateKeyPath
+     * @param array|null $configuration Optional configuration array. If null,
+     *        default configuration with a Google STUN server will be used.
+     *        Expected keys:
+     *        - 'iceServers': Array of ICE server configurations
+     *        - 'certificatePath': Path to a certificate file (optional)
+     *        - 'privateKeyPath': Path to a private key file (optional)
+     * @throws InvalidArgumentException If iceServer configuration is invalid
      */
-    public function __construct(
-        array $iceServers = [],
-        ?string $certificatePath = null,
-        ?string $privateKeyPath = null
-    ) {
-        $this->iceServers = empty($iceServers) ? $this->getDefaultIceServer() : $iceServers;
-        $this->certificatePath = $certificatePath;
-        $this->privateKeyPath = $privateKeyPath;
+    public function __construct(?array $configuration = null)
+    {
+        $configuration !== null ? $this->parseConfiguration($configuration) : $this->getDefaultConfiguration();
     }
 
     /**
@@ -150,11 +153,11 @@ class RTCConfiguration implements RTCConfigurationInterface
      *        - 'iceServers': Array of ICE server configurations (required if present)
      *        - 'certificatePath': Path to a certificate file (optional)
      *        - 'privateKeyPath': Path to a private key file (optional)
-     * @return RTCConfiguration
+     * @return void
+     * @throws InvalidArgumentException If iceServer configuration is missing required 'urls' key
      */
-    public static function parseConfiguration(array $configuration): self
+    private function parseConfiguration(array $configuration): void
     {
-        $iceServers = [];
         if (isset($configuration['iceServers'])) {
             foreach ($configuration["iceServers"] as $iceServer) {
                 if (!isset($iceServer["urls"])) {
@@ -167,28 +170,46 @@ class RTCConfiguration implements RTCConfigurationInterface
                 $iceServerObj->setCredential($iceServer["credential"] ?? null);
                 $iceServerObj->setCredentialType($iceServer["credentialType"] ?? null);
 
-                $iceServers[] = $iceServerObj;
+                $this->addIceServer($iceServerObj);
             }
-        }else{
-            $iceServers = (new RTCConfiguration)->getDefaultIceServer();
         }
 
-        $certificatePath = $configuration["certificatePath"] ?? null;
-        $privateKeyPath = $configuration["privateKeyPath"] ?? null;
-
-        return new static($iceServers, $certificatePath, $privateKeyPath);
+        $this->certificatePath = $configuration["certificatePath"] ?? null;
+        $this->privateKeyPath = $configuration["privateKeyPath"] ?? null;
     }
 
     /**
-     * return the default ice configuration with Google's public STUN server
+     * Sets up default configuration with Google's public STUN server
      *
-     * @return array<RTCIceServer>
+     * @return void
      */
-    private function getDefaultIceServer(): array
+    private function getDefaultConfiguration(): void
     {
         $iceServer  = new RTCIceServer();
         $iceServer->setUrls([self::DEFAULT_STUN_SERVER]);
+        $this->addIceServer($iceServer);
+    }
 
-        return [$iceServer];
+    public function getIcePortRange(): ?array
+    {
+        return $this->icePortRange;
+    }
+
+    public function setIcePortRange(int $minPort, int $maxPort): void
+    {
+        if ($maxPort- $minPort < 100) {
+            throw new InvalidArgumentException("maxPort - minPort must be greater than 100");
+        }
+        $this->icePortRange = [$minPort, $maxPort];
+    }
+
+    public function getTransportPolicy(): ?TransportPolicyType
+    {
+        return $this->transportPolicy;
+    }
+
+    public function setTransportPolicy(?TransportPolicyType $transportPolicy): void
+    {
+        $this->transportPolicy = $transportPolicy;
     }
 }

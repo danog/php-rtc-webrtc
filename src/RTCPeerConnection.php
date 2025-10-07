@@ -245,14 +245,13 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     /**
      * Creates a new RTCPeerConnection instance.
      *
-     * @param array|RTCConfigurationInterface $configuration Configuration options for the connection
-     * @throws DateInvalidOperationException If there's an SSL-related error
-     * @throws OpenSSLException If there's an SSL-related error
+     * @param array|RTCConfiguration|null $configuration Configuration options for the connection
      * @throws RTCCertificateException If certificate generation fails
+     * @throws OpenSSLException|DateInvalidOperationException If there's an SSL-related error
      */
-    public function __construct(array|RTCConfigurationInterface $configuration = [])
+    public function __construct(null|array|RTCConfigurationInterface $configuration = null)
     {
-        $this->configuration = $configuration instanceof RTCConfigurationInterface ? $configuration : RTCConfiguration::parseConfiguration($configuration);
+        $this->configuration = $configuration instanceof RTCConfigurationInterface ? $configuration : new RTCConfiguration($configuration);
         $this->certificates[] = new RTCCertificate($this->configuration->getPrivateKeyPath(), $this->configuration->getCertificatePath());
         $this->cname = Uuid::uuid4()->toString();
         $this->streamId = Uuid::uuid4()->toString();
@@ -735,7 +734,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     private function createDtlsTransport(): RTCDtlsTransport
     {
         // create ICE transport
-        $iceGatherer = new RTCIceGatherer($this->configuration->getIceServers());
+        $iceGatherer = new RTCIceGatherer($this->configuration->getIceServers(), $this->configuration->getIcePortRange(), $this->configuration->getTransportPolicy(), logger: $this->logger);
         $iceGatherer->on("statechange", fn() => $this->updateIceGatheringState());
         $iceTransport = new RTCIceTransport($iceGatherer, $this->logger);
         $iceTransport->on("statechange", fn() => $this->updateIceConnectionState());
@@ -977,14 +976,14 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
                 }
             }
 
-            async(fn() => $this->connect())();
-
             if ($sessionDescription->isType("answer")) {
                 $this->currentLocalDescription = $sessionDescription;
                 $this->pendingLocalDescription = null;
             } else {
                 $this->pendingLocalDescription = $sessionDescription;
             }
+
+            async(fn() => $this->connect())();
         })();
     }
 
@@ -1245,7 +1244,6 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
                 break;
             }
         }
-
 
         if ($this->sctp and $this->sctp->getMid() == $masterMid) {
             $masterTransport = $this->sctp->getDtlsTransport();

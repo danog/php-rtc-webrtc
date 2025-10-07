@@ -64,7 +64,7 @@ guide for detailed instructions on how to get involved. Together, we can make a 
 ### Our Plans for the Future
 We are not stopping here. We're actively continuing development on the PHP WebRTC packages.
 
-Right now, we're working privately on a **[Selective Forwarding Unit (SFU)](https://getstream.io/resources/projects/webrtc/architectures/sfu/)** implementation and a **Laravel package that bundles everything together**, including this WebRTC package. Once that's ready, our goal is to build a **minimal video conferencing web** app using Laravel, and to continue maintaining this repository along with 24 other related packages.
+Right now, we're working privately on a **[Selective Forwarding Unit (SFU)](https://quasarstream.com/blog/sfu/)** implementation and a **Laravel package that bundles everything together**, including this WebRTC package. Once that's ready, our goal is to build a **minimal video conferencing web** app using Laravel, and to continue maintaining this repository along with 24 other related packages.
 
 If you're interested in building real-time communication tools in PHP, like a video conferencing app, you are more than welcome to join the project. Fork the repos, contribute to them, and help grow this community.
 
@@ -78,16 +78,6 @@ Laravel, and WebRTC(only one of them is also enough).
 If that sounds like you, this could be a great place to get involved.
 
 Feel free to reach out by email(via github@aminyazdanpanah.com) with your GitHub username (for example: github.com/your-username) and we’ll get back to you soon.
-
-### About Git History
-We've been working on this repository and many other PHP WebRTC-related ones
-(**such as ICE, RTP, RTCP, and more than 22 others**)
-for a long time privately(in our git server) before making them open source(**We released our packages only after they have been fully tested and thoroughly debugged**).
-Originally, there was a long commit history that reflected all our work.
-
-However, we decided to **remove that history** in the initial public commit to **protect our privacy**. The original commits included details like our **working hours based on commit times and counts**, as well as our **personal email addresses**, which we did not feel comfortable sharing publicly.
-
-**Removing the history helps us keep that information private and stay a bit safer from potential security risks.**
 
 
 ## License
