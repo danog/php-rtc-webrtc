@@ -1,1 +1,3 @@
-github: [php-webrtc]
+github:
+  - php-webrtc
+  - quasarstream

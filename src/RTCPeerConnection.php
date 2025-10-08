@@ -734,7 +734,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     private function createDtlsTransport(): RTCDtlsTransport
     {
         // create ICE transport
-        $iceGatherer = new RTCIceGatherer($this->configuration->getIceServers(), $this->configuration->getIcePortRange(), $this->configuration->getTransportPolicy(), logger: $this->logger);
+        $iceGatherer = new RTCIceGatherer($this->configuration->getIceServers(), $this->configuration->iceSettings(), $this->logger);
         $iceGatherer->on("statechange", fn() => $this->updateIceGatheringState());
         $iceTransport = new RTCIceTransport($iceGatherer, $this->logger);
         $iceTransport->on("statechange", fn() => $this->updateIceConnectionState());

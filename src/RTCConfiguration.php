@@ -12,49 +12,63 @@
 namespace Webrtc\Webrtc;
 
 use Webrtc\Exception\InvalidArgumentException;
-use Webrtc\ICE\Enum\TransportPolicyType;
 use Webrtc\ICE\RTCIceServer;
 use Webrtc\ICE\RTCIceServerInterface;
+use Webrtc\ICE\RTCICESetting;
 
 /**
  * The `RTCConfiguration` class provides configuration options for an
- * `RTCPeerConnection` class.
+ * `RTCPeerConnection` instance.
  *
- * This class allows configuration of ICE servers (STUN/TURN), certificate paths,
- * and private key paths for WebRTC connections. It implements the
- * `RTCConfigurationInterface` and provides methods to manage ICE servers and
- * security credentials.
+ * It allows configuring ICE servers (STUN/TURN), certificate paths,
+ * private key paths, and low-level ICE behavior through `RTCICESetting`.
+ *
+ * Example usage:
+ * ```php
+ * $config = new RTCConfiguration([
+ *     'iceServers' => [
+ *         ['urls' => 'stun:stun.l.google.com:19302']
+ *     ]
+ * ]);
+ *
+ * $config->iceSettings()->setIcePortRange(40000, 50000);
+ * ```
  */
 class RTCConfiguration implements RTCConfigurationInterface
 {
     /**
-     * Default STUN server URL used when no configuration is provided
+     * Default STUN server URL used when no configuration is provided.
      */
     private const string DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302";
 
     /**
-     * Array of RTCIceServer objects representing STUN/TURN servers
+     * Array of RTCIceServer objects representing STUN/TURN servers.
      *
      * @var array<RTCIceServerInterface>
      */
     private array $iceServers = [];
 
     /**
-     * Path to the certificate file for secure connections
+     * Path to the certificate file for secure connections.
      *
      * @var string|null
      */
     private ?string $certificatePath = null;
 
     /**
-     * Path to the private key file for secure connections
+     * Path to the private key file for secure connections.
      *
      * @var string|null
      */
     private ?string $privateKeyPath = null;
 
-    private ?array $icePortRange = null;
-    private ?TransportPolicyType $transportPolicy = null;
+    /**
+     * ICE settings object defining port range, transport policy,
+     * NAT mapping, and IP family usage.
+     *
+     * @var RTCICESetting
+     */
+    private RTCICESetting $iceSettings;
 
     /**
      * Constructs a new RTCConfiguration instance
@@ -69,6 +83,7 @@ class RTCConfiguration implements RTCConfigurationInterface
      */
     public function __construct(?array $configuration = null)
     {
+        $this->iceSettings = new RTCICESetting();
         $configuration !== null ? $this->parseConfiguration($configuration) : $this->getDefaultConfiguration();
     }
 
@@ -185,31 +200,21 @@ class RTCConfiguration implements RTCConfigurationInterface
      */
     private function getDefaultConfiguration(): void
     {
-        $iceServer  = new RTCIceServer();
+        $iceServer = new RTCIceServer();
         $iceServer->setUrls([self::DEFAULT_STUN_SERVER]);
         $this->addIceServer($iceServer);
     }
 
-    public function getIcePortRange(): ?array
+    /**
+     * Gets the ICE settings instance associated with this configuration.
+     *
+     * This object allows customization of advanced ICE parameters such as
+     * port ranges, NAT mappings, ICE-Lite mode, and transport policies.
+     *
+     * @return RTCICESetting The ICE settings instance
+     */
+    public function iceSettings(): RTCICESetting
     {
-        return $this->icePortRange;
-    }
-
-    public function setIcePortRange(int $minPort, int $maxPort): void
-    {
-        if ($maxPort- $minPort < 100) {
-            throw new InvalidArgumentException("maxPort - minPort must be greater than 100");
-        }
-        $this->icePortRange = [$minPort, $maxPort];
-    }
-
-    public function getTransportPolicy(): ?TransportPolicyType
-    {
-        return $this->transportPolicy;
-    }
-
-    public function setTransportPolicy(?TransportPolicyType $transportPolicy): void
-    {
-        $this->transportPolicy = $transportPolicy;
+        return $this->iceSettings;
     }
 }
