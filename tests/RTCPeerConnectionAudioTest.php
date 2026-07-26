@@ -116,23 +116,9 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 //
 //         check the outcome
         $this->assertIceCompleted($pc1, $pc2);
-//var_dump(11);
-//         allow media to flow
+        // Allow media to flow before reading the stats back.
         delay(2);
-//        await(async(function()  {
-//            $this->loop->addTimer(1, fn() => true);
-//        })());
-//        await($this->asyncSleep(2));
-//        $deferred = new \React\Promise\Deferred();
 
-        // Set up a timer that will resolve the deferred after 2 seconds
-//        $this->loop->addTimer(2, function() use ($deferred) {
-//            $deferred->resolve(true);
-//        });
-
-        // Wait for the deferred to resolve
-//        await($deferred->promise());
-//         check stats
         $report = $pc1->getStats();
 
         $this->assertInstanceOf(RTCStatsReport::class, $report);
