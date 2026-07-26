@@ -39,7 +39,7 @@ class RTCConfiguration implements RTCConfigurationInterface
     /**
      * Default STUN server URL used when no configuration is provided.
      */
-    private const string DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302";
+    private const DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302";
 
     /**
      * Array of RTCIceServer objects representing STUN/TURN servers.

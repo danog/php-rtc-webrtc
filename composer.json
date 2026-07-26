@@ -1,63 +1,64 @@
 {
-  "name": "quasarstream/webrtc",
-  "type": "library",
-  "description": "This package provides a complete WebRTC implementation written entirely in PHP",
-  "keywords": [
-    "rtp",
-    "webrtc"
-  ],
-  "homepage": "https://www.quasarstream.com/webrtc",
-  "license": "BSD-3-Clause",
-  "authors": [
-    {
-      "name": "Amin Yazdanpanah",
-      "email": "github@aminyazdanpanah.com"
-    },
-    {
-      "name": "Sana Moniri",
-      "email": "s.mo@quasarstream.com"
-    },
-    {
-      "name": "Quasar Stream Community",
-      "homepage": "https://quasarstream.com/teams"
-    }
-  ],
-  "require": {
-    "php": "^8.4",
-    "quasarstream/exception": "^1.0",
-    "quasarstream/ice": "^1.0",
-    "quasarstream/rtp": "^1.0",
-    "quasarstream/sctp": "^1.0",
-    "quasarstream/stats": "^1.0",
-    "quasarstream/sdp": "^1.0",
-    "quasarstream/dtls": "^1.0",
-    "quasarstream/ntp": "^1.0",
-    "evenement/evenement": "^3.0"
-  },
-  "require-dev": {
-    "phpunit/php-code-coverage": "11.0.x-dev",
-    "phpunit/phpunit": "^11.3"
-  },
-  "autoload": {
-    "psr-4": {
-      "Webrtc\\Webrtc\\": "src"
-    }
-  },
-  "autoload-dev": {
-    "psr-4": {
-      "Tests\\Webrtc\\Webrtc\\": "tests"
-    }
-  },
-  "scripts": {
-    "pre-install-cmd": [
-      "@check-linux"
+    "name": "quasarstream/webrtc",
+    "type": "library",
+    "description": "This package provides a complete WebRTC implementation written entirely in PHP",
+    "keywords": [
+        "rtp",
+        "webrtc"
     ],
-    "pre-update-cmd": [
-      "@check-linux"
+    "homepage": "https://www.quasarstream.com/webrtc",
+    "license": "BSD-3-Clause",
+    "authors": [
+        {
+            "name": "Amin Yazdanpanah",
+            "email": "github@aminyazdanpanah.com"
+        },
+        {
+            "name": "Sana Moniri",
+            "email": "s.mo@quasarstream.com"
+        },
+        {
+            "name": "Quasar Stream Community",
+            "homepage": "https://quasarstream.com/teams"
+        }
     ],
-    "check-linux": [
-      "php -r \"if (stripos(PHP_OS_FAMILY, 'Linux') === false) { fwrite(STDERR, 'This package only supports Linux.' . PHP_EOL); exit(1); }\""
-    ]
-  },
-  "minimum-stability": "dev"
+    "require": {
+        "php": "^8.2",
+        "quasarstream/exception": "^1.0",
+        "quasarstream/ice": "^1.0",
+        "quasarstream/rtp": "^1.0",
+        "quasarstream/sctp": "^1.0",
+        "quasarstream/stats": "^1.0",
+        "quasarstream/sdp": "^1.0",
+        "quasarstream/dtls": "^1.0",
+        "quasarstream/ntp": "^1.0",
+        "evenement/evenement": "^3.0",
+        "symfony/polyfill-php84": "^1.32"
+    },
+    "require-dev": {
+        "phpunit/php-code-coverage": "11.0.x-dev",
+        "phpunit/phpunit": "^11.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Webrtc\\Webrtc\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\Webrtc\\Webrtc\\": "tests"
+        }
+    },
+    "scripts": {
+        "pre-install-cmd": [
+            "@check-linux"
+        ],
+        "pre-update-cmd": [
+            "@check-linux"
+        ],
+        "check-linux": [
+            "php -r \"if (stripos(PHP_OS_FAMILY, 'Linux') === false) { fwrite(STDERR, 'This package only supports Linux.' . PHP_EOL); exit(1); }\""
+        ]
+    },
+    "minimum-stability": "dev"
 }

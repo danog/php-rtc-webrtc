@@ -109,12 +109,12 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     /**
      * Port number used for discard protocol (used as placeholder in SDP)
      */
-    private const int DISCARD_PORT = 9;
+    private const DISCARD_PORT = 9;
 
     /**
      * IP address used as placeholder in SDP before real candidates are gathered
      */
-    private const string DISCARD_HOST = "0.0.0.0";
+    private const DISCARD_HOST = "0.0.0.0";
 
     /**
      * Configuration object containing ICE servers, certificates, and other settings

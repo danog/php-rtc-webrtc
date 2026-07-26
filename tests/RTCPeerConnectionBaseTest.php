@@ -24,7 +24,7 @@ use function React\Async\delay;
 #[CoversClass(RTCPeerConnection::class)]
 class RTCPeerConnectionBaseTest extends TestCase
 {
-    protected const string H264_SDP = "a=rtpmap:99 H264/90000\r\n" .
+    protected const H264_SDP = "a=rtpmap:99 H264/90000\r\n" .
     "a=rtcp-fb:99 nack\r\n" .
     "a=rtcp-fb:99 nack pli\r\n" .
     "a=rtcp-fb:99 goog-remb\r\n" .
@@ -40,7 +40,7 @@ class RTCPeerConnectionBaseTest extends TestCase
     "a=fmtp:102 apt=101\r\n";
 
     // VP8 SDP parameters
-    protected const string VP8_SDP = "a=rtpmap:97 VP8/90000\r\n" .
+    protected const VP8_SDP = "a=rtpmap:97 VP8/90000\r\n" .
     "a=rtcp-fb:97 nack\r\n" .
     "a=rtcp-fb:97 nack pli\r\n" .
     "a=rtcp-fb:97 goog-remb\r\n" .
