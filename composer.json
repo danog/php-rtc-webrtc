@@ -1,7 +1,7 @@
 {
-    "name": "quasarstream/webrtc",
+    "name": "danog/php-rtc-webrtc",
     "type": "library",
-    "description": "This package provides a complete WebRTC implementation written entirely in PHP",
+    "description": "This package provides a complete WebRTC implementation written entirely in PHP. Fork with FFI made optional and a pure-PHP DTLS/SRTP stack, maintained for MadelineProto.",
     "keywords": [
         "rtp",
         "webrtc"
@@ -60,5 +60,8 @@
             "php -r \"if (stripos(PHP_OS_FAMILY, 'Linux') === false) { fwrite(STDERR, 'This package only supports Linux.' . PHP_EOL); exit(1); }\""
         ]
     },
-    "minimum-stability": "dev"
+    "minimum-stability": "dev",
+    "replace": {
+        "quasarstream/webrtc": "self.version"
+    }
 }
