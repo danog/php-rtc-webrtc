@@ -2,6 +2,7 @@
 
 namespace Tests\Webrtc\Webrtc;
 
+use Webrtc\AVCodec\AVCodec;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -53,6 +54,12 @@ class RTCPeerConnectionBaseTest extends TestCase
 
     protected function setUp(): void
     {
+        if (!AVCodec::isAvailable()) {
+            self::markTestSkipped(
+                'Transcoding needs the FFI extension and an FFmpeg build matching the bundled headers.'
+            );
+        }
+
         parent::setUp();
         $this->pc = new RTCPeerConnection();
         $this->longData = str_repeat("\xff", 2000);
@@ -62,7 +69,11 @@ class RTCPeerConnectionBaseTest extends TestCase
     protected function tearDown(): void
     {
         parent::tearDown();
-        $this->loop->run();
+
+        // setUp() can skip before the fixture exists, and tearDown() still runs.
+        if (isset($this->loop)) {
+            $this->loop->run();
+        }
     }
 
     public function testConstruct(): void
