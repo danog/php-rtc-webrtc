@@ -15,8 +15,7 @@ use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\RTCConfiguration;
 use Webrtc\Webrtc\RTCPeerConnection;
-use function React\Async\await;
-use function React\Async\delay;
+use function Amp\delay;
 
 #[UsesClass(RTCConfiguration::class)]
 #[CoversClass(RTCPeerConnection::class)]
@@ -45,25 +44,25 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
         // create offer
         $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat", protocol: ""));
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
 
         // set remote description
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertHasDtls($answer, "active");
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -112,28 +111,28 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
         // create offer
         $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat", protocol: ""));
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
 
         // handle offer with a replaced DTLS role
-        await($pc2->setRemoteDescription(new RTCSessionDescription(
+        $pc2->setRemoteDescription(new RTCSessionDescription(
             sdp: str_replace("actpass", "passive", $pc1->getLocalDescription()->getSdp()),
             type: "offer"
-        )));
+        ));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertHasDtls($answer, "active");
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -183,28 +182,28 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
         // create offer
         $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat", protocol: ""));
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
 
         // handle offer with a replaced DTLS role
-        await($pc2->setRemoteDescription(new RTCSessionDescription(
+        $pc2->setRemoteDescription(new RTCSessionDescription(
             sdp: str_replace("actpass", "active", $pc1->getLocalDescription()->getSdp()),
             type: "offer"
-        )));
+        ));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertHasDtls($answer, "passive");
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -239,10 +238,10 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
         $tr1A = $pc1->addTransceiver(MediaKind::Video, SDPDirections::recvonly);
         $tr1B = $pc1->addTransceiver(MediaKind::Video, SDPDirections::recvonly);
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
 
         $tr2A = $pc2->addTransceiver(new VideoStreamTrack());
         $tr2B = $pc2->addTransceiver(new VideoStreamTrack());

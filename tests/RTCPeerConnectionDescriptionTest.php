@@ -16,9 +16,8 @@ use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
 use Webrtc\Webrtc\RTCConfiguration;
 use Webrtc\Webrtc\RTCPeerConnection;
-use function React\Async\async;
-use function React\Async\await;
-use function React\Async\delay;
+use function Amp\async;
+use function Amp\delay;
 
 #[UsesClass(RTCConfiguration::class)]
 #[CoversClass(RTCPeerConnection::class)]
@@ -30,7 +29,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc->close();
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("RTCPeerConnection is closed");
-        await($pc->createAnswer());
+        $pc->createAnswer();
     }
 
     public function testCreateAnswerWithoutOffer()
@@ -38,7 +37,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc = new RTCPeerConnection();
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot create answer in signaling state stable");
-        await($pc->createAnswer());
+        $pc->createAnswer();
     }
 
     public function testCreateOfferClosed()
@@ -47,7 +46,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc->close();
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("RTCPeerConnection is closed");
-        await($pc->createOffer());
+        $pc->createOffer();
     }
 
     public function testCreateOfferWithoutMedia()
@@ -55,18 +54,18 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc = new RTCPeerConnection();
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Cannot create an offer with no media and no data channels");
-        await($pc->createOffer());
+        $pc->createOffer();
     }
 
     public function testSetLocalDescriptionUnexpectedAnswer()
     {
         $pc = new RTCPeerConnection();
         $pc->addTrack(new AudioStreamTrack());
-        $answer = await($pc->createOffer());
+        $answer = $pc->createOffer();
         $answer->setType("answer");
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot handle answer in signaling state \"stable\"");
-        await($pc->setLocalDescription($answer));
+        $pc->setLocalDescription($answer);
     }
 
     public function testSetLocalDescriptionUnexpectedOffer()
@@ -76,21 +75,21 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
         // apply offer
         $pc1->addTrack(new AudioStreamTrack());
-        await($pc1->setLocalDescription(await($pc1->createOffer())));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         async(function () use ($pc1, $pc2) {
             delay(.1);
             $pc1->close();
             $pc2->close();
-        })();
+        });
 
         // mangle answer into an offer
         $offer = $pc2->getRemoteDescription();
         $offer->setType("offer");
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot handle offer in signaling state \"haveRemoteOffer\"");
-        await($pc2->setLocalDescription($offer));
+        $pc2->setLocalDescription($offer);
     }
 
     public function testSetRemoteDescriptionNoCommonAudio()
@@ -98,7 +97,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc1 = new RTCPeerConnection();
         $pc2 = new RTCPeerConnection();
         $pc1->addTrack(new AudioStreamTrack());
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
 
         $mangledSdp = [];
         foreach (explode("\n", $offer->getSdp()) as $line) {
@@ -117,11 +116,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
             delay(.1);
             $pc1->close();
             $pc2->close();
-        })();
+        });
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Failed to set remote audio description send parameters");
-        await($pc2->setRemoteDescription($mangled));
+        $pc2->setRemoteDescription($mangled);
     }
 
     public function testSetRemoteDescriptionNoCommonVideo()
@@ -129,7 +128,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc1 = new RTCPeerConnection();
         $pc2 = new RTCPeerConnection();
         $pc1->addTrack(new VideoStreamTrack());
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
 
         $mangled = new RTCSessionDescription(
             sdp: str_replace("90000", "92000", $offer->getSdp()),
@@ -141,11 +140,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
             delay(.1);
             $pc1->close();
             $pc2->close();
-        })();
+        });
 
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Failed to set remote video description send parameters");
-        await($pc2->setRemoteDescription($mangled));
+        $pc2->setRemoteDescription($mangled);
     }
 
     public function testSetRemoteDescriptionMediaMismatch()
@@ -155,13 +154,13 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
         // apply offer
         $pc1->addTrack(new AudioStreamTrack());
-        $offer = await($pc1->createOffer());
-        await($pc1->setLocalDescription($offer));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $offer = $pc1->createOffer();
+        $pc1->setLocalDescription($offer);
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         // apply answer
-        $answer = await($pc2->createAnswer());
-        await($pc2->setLocalDescription($answer));
+        $answer = $pc2->createAnswer();
+        $pc2->setLocalDescription($answer);
         $mangled = new RTCSessionDescription(
             sdp: str_replace("m=audio", "m=video", $pc2->getLocalDescription()->getSdp()),
             type: $pc2->getLocalDescription()->getType()
@@ -172,11 +171,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
             delay(.1);
             $pc1->close();
             $pc2->close();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot handle answer in signaling state \"stable\"");
-        await($pc2->setRemoteDescription($mangled));
+        $pc2->setRemoteDescription($mangled);
     }
 
     public function testSetRemoteDescriptionWithInvalidDtlsSetupForAnswer()
@@ -186,13 +185,13 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
         // apply offer
         $pc1->addTrack(new AudioStreamTrack());
-        $offer = await($pc1->createOffer());
-        await($pc1->setLocalDescription($offer));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $offer = $pc1->createOffer();
+        $pc1->setLocalDescription($offer);
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         // apply answer
-        $answer = await($pc2->createAnswer());
-        await($pc2->setLocalDescription($answer));
+        $answer = $pc2->createAnswer();
+        $pc2->setLocalDescription($answer);
         $mangled = new RTCSessionDescription(
             sdp: str_replace("a=setup:active", "a=setup:actpass", $pc2->getLocalDescription()->getSdp()),
             type: $pc2->getLocalDescription()->getType()
@@ -203,11 +202,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
             delay(.1);
             $pc1->close();
             $pc2->close();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot handle answer in signaling state \"stable\"");
-        await($pc2->setRemoteDescription($mangled));
+        $pc2->setRemoteDescription($mangled);
     }
 
     public function testSetRemoteDescriptionWithoutIceCredentials()
@@ -216,8 +215,8 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc2 = new RTCPeerConnection();
 
         $pc1->addTrack(new AudioStreamTrack());
-        $offer = await($pc1->createOffer());
-        await($pc1->setLocalDescription($offer));
+        $offer = $pc1->createOffer();
+        $pc1->setLocalDescription($offer);
 
         $mangledSdp = preg_replace(
             '/^a=(ice-ufrag|ice-pwd):.*\r\n/m',
@@ -233,11 +232,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
             delay(.1);
             $pc1->close();
             $pc2->close();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("ICE username fragment or password is missing");
-        await($pc2->setRemoteDescription($mangled));
+        $pc2->setRemoteDescription($mangled);
     }
 
     public function testSetRemoteDescriptionWithoutRtcpMux()
@@ -246,8 +245,8 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc2 = new RTCPeerConnection();
 
         $pc1->addTrack(new AudioStreamTrack());
-        $offer = await($pc1->createOffer());
-        await($pc1->setLocalDescription($offer));
+        $offer = $pc1->createOffer();
+        $pc1->setLocalDescription($offer);
 
         $mangledSdp = preg_replace(
             '/^a=rtcp-mux\r\n/m',
@@ -263,11 +262,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
             delay(.1);
             $pc1->close();
             $pc2->close();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("RTCP mux is not enabled");
-        await($pc2->setRemoteDescription($mangled));
+        $pc2->setRemoteDescription($mangled);
     }
 
     public function testSetRemoteDescriptionUnexpectedAnswer()
@@ -277,29 +276,29 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         async(function () use ($pc) {
             delay(.1);
             $pc->close();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot handle answer in signaling state \"stable\"");
-        await($pc->setRemoteDescription(new RTCSessionDescription(sdp: "", type: "answer")));
+        $pc->setRemoteDescription(new RTCSessionDescription(sdp: "", type: "answer"));
     }
 
     public function testSetRemoteDescriptionUnexpectedOffer()
     {
         $pc = new RTCPeerConnection();
         $pc->addTrack(new AudioStreamTrack());
-        $offer = await($pc->createOffer());
-        await($pc->setLocalDescription($offer));
+        $offer = $pc->createOffer();
+        $pc->setLocalDescription($offer);
 
 
         async(function () use ($pc) {
             delay(.1);
             $pc->close();
-        })();
+        });
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot handle offer in signaling state \"haveLocalOffer\"");
-        await($pc->setRemoteDescription(new RTCSessionDescription(sdp: "", type: "offer")));
+        $pc->setRemoteDescription(new RTCSessionDescription(sdp: "", type: "offer"));
     }
 
     public function testSetRemoteDescriptionMediaDatachannelBundled()
@@ -330,10 +329,10 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         // create offer
         $pc1->addTrack(new AudioStreamTrack());
         $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat", protocol: ""));
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc1));
@@ -341,7 +340,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $this->assertStringContainsString("m=audio ", $pc1->getLocalDescription()->getSdp());
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(1, $pc2->getReceivers());
         $this->assertCount(1, $pc2->getSenders());
@@ -349,13 +348,13 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("a=group:BUNDLE 0 1", $answer->getSdp());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
         $this->assertStringContainsString("a=group:BUNDLE 0 1", $pc2->getLocalDescription()->getSdp());
@@ -363,7 +362,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -374,10 +373,10 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
          */
 
         // create offer
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::completed, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc1));
@@ -387,7 +386,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc1->getLocalDescription(), "actpass");
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(1, $pc2->getReceivers());
         $this->assertCount(1, $pc2->getSenders());
@@ -395,13 +394,13 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("a=group:BUNDLE 0 1", $answer->getSdp());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertEquals(IceConnectionState::completed, $pc2->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc2->getIceGatheringState());
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
@@ -411,7 +410,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc2->getLocalDescription(), "active");
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
         $this->assertEquals(IceConnectionState::completed, $pc1->getIceConnectionState());
 

@@ -17,8 +17,7 @@ use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
 use Webrtc\Webrtc\RTCConfiguration;
 use Webrtc\Webrtc\RTCPeerConnection;
-use function React\Async\await;
-use function React\Async\delay;
+use function Amp\delay;
 
 #[UsesClass(RTCConfiguration::class)]
 #[CoversClass(RTCPeerConnection::class)]
@@ -41,10 +40,10 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc2->getReadyState());
 
         // perform SDP exchange
-        await($pc1->setLocalDescription(await($pc1->createOffer())));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
-        await($pc2->setLocalDescription(await($pc2->createAnswer())));
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription(await($pc2->createAnswer()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome
         $this->assertIceCompleted($pc1, $pc2);
@@ -76,10 +75,10 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc2->getReadyState());
 
         // perform SDP exchange
-        await($pc1->setLocalDescription(await($pc1->createOffer())));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
-        await($pc2->setLocalDescription(await($pc2->createAnswer())));
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription(await($pc2->createAnswer()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome
         $this->assertIceCompleted($pc1, $pc2);
@@ -147,13 +146,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         });
 
         // create offer
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $offer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $offer->getSdp());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc1));
@@ -163,7 +162,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc1->getLocalDescription(), "actpass");
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(0, $pc2->getReceivers());
         $this->assertCount(0, $pc2->getSenders());
@@ -171,13 +170,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $answer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("a=sctpmap:5000 webrtc-datachannel 65535", $pc2->getLocalDescription()->getSdp());
@@ -185,7 +184,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc2->getLocalDescription(), "active");
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -314,13 +313,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         });
 
         // create offer
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $offer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $offer->getSdp());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc1));
@@ -330,7 +329,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc1->getLocalDescription(), "actpass");
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(0, $pc2->getReceivers());
         $this->assertCount(0, $pc2->getSenders());
@@ -338,13 +337,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $answer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("a=sctp-port:5000", $pc2->getLocalDescription()->getSdp());
@@ -352,7 +351,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc2->getLocalDescription(), "active");
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -474,13 +473,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         });
 
         // create offer
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $offer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $offer->getSdp());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc1));
@@ -490,7 +489,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc1->getLocalDescription(), "actpass");
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(0, $pc2->getReceivers());
         $this->assertCount(0, $pc2->getSenders());
@@ -498,13 +497,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $answer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("a=sctp-port:5000", $pc2->getLocalDescription()->getSdp());
@@ -512,7 +511,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc2->getLocalDescription(), "active");
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -602,10 +601,10 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc3->getReadyState());
 
         // perform SDP exchange
-        await($pc1->setLocalDescription(await($pc1->createOffer())));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
-        await($pc2->setLocalDescription(await($pc2->createAnswer())));
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription(await($pc2->createAnswer()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome
         $this->assertIceCompleted($pc1, $pc2);
@@ -729,13 +728,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         // 1. DATA CHANNEL ONLY
 
         // create offer
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $offer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $offer->getSdp());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc1));
@@ -744,7 +743,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc1->getLocalDescription(), "actpass");
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(0, $pc2->getReceivers());
         $this->assertCount(0, $pc2->getSenders());
@@ -752,20 +751,20 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $answer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
         $this->assertHasIceCandidates($pc2->getLocalDescription());
         $this->assertHasDtls($pc2->getLocalDescription(), "active");
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome
@@ -803,18 +802,18 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         // create offer
         $pc1->addTrack(new AudioStreamTrack());
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc1));
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(1, $pc2->getReceivers());
         $this->assertCount(1, $pc2->getSenders());
@@ -823,19 +822,19 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         // create answer
         $pc2->addTrack(new AudioStreamTrack());
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertEquals(IceConnectionState::completed, $pc2->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc2->getIceGatheringState());
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("m=audio ", $pc2->getLocalDescription()->getSdp());
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
         $this->assertEquals(IceConnectionState::completed, $pc1->getIceConnectionState());
 
@@ -998,13 +997,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         });
 
         // create offer
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $offer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $offer->getSdp());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc1));
@@ -1016,7 +1015,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $desc1 = RTCPeerConnectionHelper::stripIceCandidates($pc1->getLocalDescription());
 
         // handle offer
-        await($pc2->setRemoteDescription($desc1));
+        $pc2->setRemoteDescription($desc1);
         $this->assertEquals($desc1, $pc2->getRemoteDescription());
         $this->assertCount(0, $pc2->getReceivers());
         $this->assertCount(0, $pc2->getSenders());
@@ -1024,13 +1023,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $answer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
         $this->assertHasIceCandidates($pc2->getLocalDescription());
@@ -1040,7 +1039,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $desc2 = RTCPeerConnectionHelper::stripIceCandidates($pc2->getLocalDescription());
 
         // handle answer
-        await($pc1->setRemoteDescription($desc2));
+        $pc1->setRemoteDescription($desc2);
         $this->assertEquals($desc2, $pc1->getRemoteDescription());
 
         // trickle candidates
@@ -1173,14 +1172,14 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         });
 
         // create offer
-        $offer = await($pc1->createOffer());
-        await($pc1->setLocalDescription($offer));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $offer = $pc1->createOffer();
+        $pc1->setLocalDescription($offer);
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         // create answer
-        $answer = await($pc2->createAnswer());
-        await($pc2->setLocalDescription($answer));
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $answer = $pc2->createAnswer();
+        $pc2->setLocalDescription($answer);
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome
         $this->assertIceCompleted($pc1, $pc2);
@@ -1291,14 +1290,14 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         });
 
         // create offer
-        $offer = await($pc1->createOffer());
-        await($pc1->setLocalDescription($offer));
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $offer = $pc1->createOffer();
+        $pc1->setLocalDescription($offer);
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         // create answer
-        $answer = await($pc2->createAnswer());
-        await($pc2->setLocalDescription($answer));
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $answer = $pc2->createAnswer();
+        $pc2->setLocalDescription($answer);
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome
         $this->assertIceCompleted($pc1, $pc2);
@@ -1409,13 +1408,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         });
 
         // create offer
-        $offer = await($pc1->createOffer());
+        $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $offer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $offer->getSdp());
 
-        await($pc1->setLocalDescription($offer));
+        $pc1->setLocalDescription($offer);
         $this->assertEquals(IceConnectionState::new, $pc1->getIceConnectionState());
         $this->assertEquals(IceGatheringState::complete, $pc1->getIceGatheringState());
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc1));
@@ -1424,7 +1423,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertHasDtls($pc1->getLocalDescription(), "actpass");
 
         // handle offer
-        await($pc2->setRemoteDescription($pc1->getLocalDescription()));
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
         $this->assertEquals($pc1->getLocalDescription(), $pc2->getRemoteDescription());
         $this->assertCount(0, $pc2->getReceivers());
         $this->assertCount(0, $pc2->getSenders());
@@ -1432,20 +1431,20 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $answer = await($pc2->createAnswer());
+        $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
         $this->assertStringNotContainsString("a=candidate:", $answer->getSdp());
         $this->assertStringNotContainsString("a=end-of-candidates", $answer->getSdp());
 
-        await($pc2->setLocalDescription($answer));
+        $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
         $this->assertHasIceCandidates($pc2->getLocalDescription());
         $this->assertHasDtls($pc2->getLocalDescription(), "active");
 
         // handle answer
-        await($pc1->setRemoteDescription($pc2->getLocalDescription()));
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
         $this->assertEquals($pc2->getLocalDescription(), $pc1->getRemoteDescription());
 
         // check the outcome

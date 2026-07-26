@@ -11,7 +11,6 @@
 
 namespace Webrtc\Webrtc;
 
-use React\Promise\PromiseInterface;
 use Webrtc\DataChannel\RTCDataChannel;
 use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\ICE\Enum\IceGatheringState;
@@ -39,12 +38,12 @@ interface RTCPeerConnectionInterface
     public function addTrack(MediaStreamTrack $track): RTCRtpSender;
     public function addTransceiver(MediaKind|MediaStreamTrack $trackOrKind, SDPDirections $direction = SDPDirections::sendrecv): RTCRtpTransceiver;
     public function close(): void;
-    public function createAnswer(): PromiseInterface;
-    public function createOffer(): PromiseInterface;
+    public function createAnswer(): RTCSessionDescription;
+    public function createOffer(): RTCSessionDescription;
     public function createDataChannel(RTCDataChannelParameters $parameters): RTCDataChannel;
     public function getReceivers(): array;
     public function getSenders(): array;
     public function getStats(): RTCStatsReport;
-    public function setLocalDescription(RTCSessionDescription $rtcSessionDescription): PromiseInterface;
-    public function setRemoteDescription(RTCSessionDescription $sessionDescription): PromiseInterface;
+    public function setLocalDescription(RTCSessionDescription $rtcSessionDescription): void;
+    public function setRemoteDescription(RTCSessionDescription $sessionDescription): void;
 }

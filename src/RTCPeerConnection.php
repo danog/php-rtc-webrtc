@@ -16,7 +16,6 @@ use Evenement\EventEmitter;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
 use Random\RandomException;
-use React\Promise\PromiseInterface;
 use Throwable;
 use Webrtc\Codecs\Codec;
 use Webrtc\Codecs\CodecUtility;
@@ -79,9 +78,8 @@ use Webrtc\Stats\RTCStatsReport;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
-use function React\Async\async;
-use function React\Async\await;
-use function React\Async\delay;
+use function Amp\async;
+use function Amp\delay;
 
 /**
  * RTCPeerConnection represents a WebRTC connection between the local device and a remote peer.
@@ -538,41 +536,39 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     /**
      * Creates an SDP answer to a remote offer.
      *
-     * @return PromiseInterface<RTCSessionDescription> Promise that resolves with the answer
+     * @return RTCSessionDescription The answer
      * @throws InvalidArgumentException If called in invalid signaling state
      */
-    public function createAnswer(): PromiseInterface
+    public function createAnswer(): RTCSessionDescription
     {
-        return async(function () {
-            $this->checkNotClosed();
+        $this->checkNotClosed();
 
-            if (!in_array($this->signalingState, [SignalingState::haveRemoteOffer, SignalingState::haveLocalPranswer])) {
-                throw new InvalidArgumentException("Cannot create answer in signaling state {$this->signalingState->name}");
+        if (!in_array($this->signalingState, [SignalingState::haveRemoteOffer, SignalingState::haveLocalPranswer])) {
+            throw new InvalidArgumentException("Cannot create answer in signaling state {$this->signalingState->name}");
+        }
+
+        [$sessionDescription, $groupDescription] = $this->initSessionDescription("answer");
+
+        $remoteDescription = $this->pendingRemoteDescription ?? $this->currentRemoteDescription;
+
+        foreach ($remoteDescription->getMedia() as $remoteMediaStream) {
+            if (in_array($remoteMediaStream->getKind(), ["audio", "video"])) {
+                $transceiver = $this->getTransceiverByMid($remoteMediaStream->getRTP()->muxId);
+                $mediaDescription = $this->createMediaDescriptionForTransceiver($transceiver);
+                $dtlsTransport = $transceiver->getDtlsTransport();
+            } else {
+                $mediaDescription = $this->createMediaDescriptionForSctp();
+                $dtlsTransport = $this->sctp->getDtlsTransport();
             }
 
-            [$sessionDescription, $groupDescription] = $this->initSessionDescription("answer");
+            $mediaDescription->getDtls()->role = $dtlsTransport->getRole() == DtlsRole::Auto ? DtlsRole::Client : $dtlsTransport->getRole();
+            $sessionDescription->addMedia($mediaDescription);
+            $groupDescription->items[] = $mediaDescription->getRtp()->muxId;
+        }
 
-            $remoteDescription = $this->pendingRemoteDescription ?? $this->currentRemoteDescription;
+        $sessionDescription->addGroup($groupDescription);
 
-            foreach ($remoteDescription->getMedia() as $remoteMediaStream) {
-                if (in_array($remoteMediaStream->getKind(), ["audio", "video"])) {
-                    $transceiver = $this->getTransceiverByMid($remoteMediaStream->getRTP()->muxId);
-                    $mediaDescription = $this->createMediaDescriptionForTransceiver($transceiver);
-                    $dtlsTransport = $transceiver->getDtlsTransport();
-                } else {
-                    $mediaDescription = $this->createMediaDescriptionForSctp();
-                    $dtlsTransport = $this->sctp->getDtlsTransport();
-                }
-
-                $mediaDescription->getDtls()->role = $dtlsTransport->getRole() == DtlsRole::Auto ? DtlsRole::Client : $dtlsTransport->getRole();
-                $sessionDescription->addMedia($mediaDescription);
-                $groupDescription->items[] = $mediaDescription->getRtp()->muxId;
-            }
-
-            $sessionDescription->addGroup($groupDescription);
-
-            return new RTCSessionDescription((string)$sessionDescription, $sessionDescription->getType());
-        })();
+        return new RTCSessionDescription((string)$sessionDescription, $sessionDescription->getType());
     }
 
     /**
@@ -757,64 +753,62 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     /**
      * Creates an SDP offer to initiate a connection.
      *
-     * @return PromiseInterface<RTCSessionDescription> Promise that resolves with the offer
+     * @return RTCSessionDescription The offer
      * @throws RuntimeException If called with no media or data channels
      */
-    public function createOffer(): PromiseInterface
+    public function createOffer(): RTCSessionDescription
     {
-        return async(function () {
-            $this->checkNotClosed();
+        $this->checkNotClosed();
 
-            if (!$this->sctp && empty($this->transceivers)) {
-                throw new RuntimeException("Cannot create an offer with no media and no data channels");
+        if (!$this->sctp && empty($this->transceivers)) {
+            throw new RuntimeException("Cannot create an offer with no media and no data channels");
+        }
+
+        $codec = new Codec();
+        foreach ($this->transceivers as $transceiver) {
+            $transceiver->setCodecs($this->findPreferredCodecs($codec->getCodecs($transceiver->getKind()->value), $transceiver->getPreferredCodecs()));
+            $transceiver->setheaderExtensions($codec->getHeaderExtensions($transceiver->getKind()->value));
+        }
+        $mids = $this->seenMids;
+
+        [$sessionDescription, $groupDescription] = $this->initSessionDescription("offer");
+
+        $remoteDescriptionMedias = ($this->pendingRemoteDescription ?? $this->currentRemoteDescription)?->getMedia() ?? [];
+        $localDescriptionMedias = ($this->pendingLocalDescription ?? $this->currentLocalDescription)?->getMedia() ?? [];
+
+        for ($i = 0; $i < max(count($remoteDescriptionMedias), count($localDescriptionMedias)); $i++) {
+            $mediaKind = ($localDescriptionMedias[$i] ?? $remoteDescriptionMedias[$i])?->getKind();
+            $mid = ($localDescriptionMedias[$i] ?? $remoteDescriptionMedias[$i])?->getRtp()?->muxId;
+            if (in_array($mediaKind, ["audio", "video"])) {
+                $transceiver = $this->getTransceiverByMid($mid);
+                $transceiver->setMlineIndex($i);
+                $mediaDescription = $this->createMediaDescriptionForTransceiver($transceiver, $mid);
+            } elseif ($mediaKind == "application") {
+                $mediaDescription = $this->createMediaDescriptionForSctp($mid);
             }
 
-            $codec = new Codec();
-            foreach ($this->transceivers as $transceiver) {
-                $transceiver->setCodecs($this->findPreferredCodecs($codec->getCodecs($transceiver->getKind()->value), $transceiver->getPreferredCodecs()));
-                $transceiver->setheaderExtensions($codec->getHeaderExtensions($transceiver->getKind()->value));
+            if (isset($mediaDescription)) {
+                $sessionDescription->addMedia($mediaDescription);
             }
-            $mids = $this->seenMids;
+        }
 
-            [$sessionDescription, $groupDescription] = $this->initSessionDescription("offer");
-
-            $remoteDescriptionMedias = ($this->pendingRemoteDescription ?? $this->currentRemoteDescription)?->getMedia() ?? [];
-            $localDescriptionMedias = ($this->pendingLocalDescription ?? $this->currentLocalDescription)?->getMedia() ?? [];
-
-            for ($i = 0; $i < max(count($remoteDescriptionMedias), count($localDescriptionMedias)); $i++) {
-                $mediaKind = ($localDescriptionMedias[$i] ?? $remoteDescriptionMedias[$i])?->getKind();
-                $mid = ($localDescriptionMedias[$i] ?? $remoteDescriptionMedias[$i])?->getRtp()?->muxId;
-                if (in_array($mediaKind, ["audio", "video"])) {
-                    $transceiver = $this->getTransceiverByMid($mid);
-                    $transceiver->setMlineIndex($i);
-                    $mediaDescription = $this->createMediaDescriptionForTransceiver($transceiver, $mid);
-                } elseif ($mediaKind == "application") {
-                    $mediaDescription = $this->createMediaDescriptionForSctp($mid);
-                }
-
-                if (isset($mediaDescription)) {
-                    $sessionDescription->addMedia($mediaDescription);
-                }
+        foreach ($this->transceivers as $transceiver) {
+            if ($transceiver->getMid() === null && !$transceiver->isStopped()) {
+                $transceiver->setMlineIndex(count($sessionDescription->getMedia()));
+                $sessionDescription->addMedia($this->createMediaDescriptionForTransceiver($transceiver, $this->getFreeMid($mids)));
             }
+        }
 
-            foreach ($this->transceivers as $transceiver) {
-                if ($transceiver->getMid() === null && !$transceiver->isStopped()) {
-                    $transceiver->setMlineIndex(count($sessionDescription->getMedia()));
-                    $sessionDescription->addMedia($this->createMediaDescriptionForTransceiver($transceiver, $this->getFreeMid($mids)));
-                }
-            }
+        if ($this->sctp && $this->sctp->getMid() === null) {
+            $sessionDescription->addMedia($this->createMediaDescriptionForSctp($this->getFreeMid($mids)));
+        }
 
-            if ($this->sctp && $this->sctp->getMid() === null) {
-                $sessionDescription->addMedia($this->createMediaDescriptionForSctp($this->getFreeMid($mids)));
-            }
+        foreach ($sessionDescription->getMedia() as $media) {
+            $groupDescription->items[] = $media->getRtp()->muxId;
+        }
+        $sessionDescription->addGroup($groupDescription);
 
-            foreach ($sessionDescription->getMedia() as $media) {
-                $groupDescription->items[] = $media->getRtp()->muxId;
-            }
-            $sessionDescription->addGroup($groupDescription);
-
-            return new RTCSessionDescription((string)$sessionDescription, $sessionDescription->getType());
-        })();
+        return new RTCSessionDescription((string)$sessionDescription, $sessionDescription->getType());
     }
 
     /**
@@ -912,144 +906,140 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      * Sets the local description for the connection.
      *
      * @param RTCSessionDescription $rtcSessionDescription The description to set
-     * @return PromiseInterface Promise that resolves when complete
+     * @return void Returns once complete
      */
-    public function setLocalDescription(RTCSessionDescription $rtcSessionDescription): PromiseInterface
+    public function setLocalDescription(RTCSessionDescription $rtcSessionDescription): void
     {
-        return async(function () use ($rtcSessionDescription) {
-            $this->debug(sprintf("setLocalDescription(%s)\n%s", $rtcSessionDescription->getType(), $rtcSessionDescription->getSdp()));
+        $this->debug(sprintf("setLocalDescription(%s)\n%s", $rtcSessionDescription->getType(), $rtcSessionDescription->getSdp()));
 
-            $sessionDescription = SessionDescription::decode($rtcSessionDescription->getSdp());
-            $sessionDescription->setType($rtcSessionDescription->getType());
-            $this->validateDescription($sessionDescription, true);
+        $sessionDescription = SessionDescription::decode($rtcSessionDescription->getSdp());
+        $sessionDescription->setType($rtcSessionDescription->getType());
+        $this->validateDescription($sessionDescription, true);
 
-            if ($sessionDescription->isType("offer")) {
-                $this->setSignalingState(SignalingState::haveLocalOffer);
-            } elseif ($sessionDescription->isType("answer")) {
-                $this->setSignalingState(SignalingState::stable);
+        if ($sessionDescription->isType("offer")) {
+            $this->setSignalingState(SignalingState::haveLocalOffer);
+        } elseif ($sessionDescription->isType("answer")) {
+            $this->setSignalingState(SignalingState::stable);
+        }
+
+        foreach ($sessionDescription->getMedia() as $index => $media) {
+            $this->seenMids[$media->getRtp()->muxId] = true;
+
+            if (in_array($media->getKind(), ["audio", "video"])) {
+                $transceiver = $this->getTransceiverByMLineIndex($index);
+                $transceiver->setMid($media->getRtp()->muxId);
+            } elseif ($media->getKind() === "application") {
+                $this->sctp->setMid($media->getRtp()->muxId);
             }
+        }
 
-            foreach ($sessionDescription->getMedia() as $index => $media) {
-                $this->seenMids[$media->getRtp()->muxId] = true;
-
-                if (in_array($media->getKind(), ["audio", "video"])) {
-                    $transceiver = $this->getTransceiverByMLineIndex($index);
-                    $transceiver->setMid($media->getRtp()->muxId);
-                } elseif ($media->getKind() === "application") {
-                    $this->sctp->setMid($media->getRtp()->muxId);
+        if ($sessionDescription->isType("offer")) {
+            foreach ($this->iceTransports as $iceTransport) {
+                if (!$iceTransport->isRoleSet()) {
+                    $iceTransport->getIceConnection()->setIceRole(IceRole::Controlling);
+                    $iceTransport->setRoleSet(true);
                 }
             }
+        }
 
-            if ($sessionDescription->isType("offer")) {
-                foreach ($this->iceTransports as $iceTransport) {
-                    if (!$iceTransport->isRoleSet()) {
-                        $iceTransport->getIceConnection()->setIceRole(IceRole::Controlling);
-                        $iceTransport->setRoleSet(true);
-                    }
-                }
-            }
-
-            if ($sessionDescription->isType("answer")) {
-                foreach ($sessionDescription->getMedia() as $index => $media) {
-                    if (in_array($media->getKind(), ["audio", "video"])) {
-                        $transceiver = $this->getTransceiverByMLineIndex($index);
-                        $transceiver->getDtlsTransport()->setRole($media->getDTLS()->role);
-                    } elseif ($media->getKind() === "application") {
-                        $this->sctp->getDtlsTransport()->setRole($media->getDTLS()->role);
-                    }
-                }
-            }
-
-            if (in_array($sessionDescription->getType(), ["answer", "pranswer"])) {
-                foreach ($this->transceivers as $transceiver) {
-                    $transceiver->setCurrentDirection(SDPDirections::tryFrom($transceiver->getDirection()->value & $transceiver->getOfferDirection()->value) ?? SDPDirections::sendonly);
-                }
-            }
-            $this->gatherIceCandidates();
-
+        if ($sessionDescription->isType("answer")) {
             foreach ($sessionDescription->getMedia() as $index => $media) {
                 if (in_array($media->getKind(), ["audio", "video"])) {
                     $transceiver = $this->getTransceiverByMLineIndex($index);
-                    $this->addTransportDescription($media, $transceiver->getDtlsTransport());
+                    $transceiver->getDtlsTransport()->setRole($media->getDTLS()->role);
                 } elseif ($media->getKind() === "application") {
-                    $this->addTransportDescription($media, $this->sctp->getDtlsTransport());
+                    $this->sctp->getDtlsTransport()->setRole($media->getDTLS()->role);
                 }
             }
+        }
 
-            if ($sessionDescription->isType("answer")) {
-                $this->currentLocalDescription = $sessionDescription;
-                $this->pendingLocalDescription = null;
-            } else {
-                $this->pendingLocalDescription = $sessionDescription;
+        if (in_array($sessionDescription->getType(), ["answer", "pranswer"])) {
+            foreach ($this->transceivers as $transceiver) {
+                $transceiver->setCurrentDirection(SDPDirections::tryFrom($transceiver->getDirection()->value & $transceiver->getOfferDirection()->value) ?? SDPDirections::sendonly);
             }
+        }
+        $this->gatherIceCandidates();
 
-            async(fn() => $this->connect())();
-        })();
+        foreach ($sessionDescription->getMedia() as $index => $media) {
+            if (in_array($media->getKind(), ["audio", "video"])) {
+                $transceiver = $this->getTransceiverByMLineIndex($index);
+                $this->addTransportDescription($media, $transceiver->getDtlsTransport());
+            } elseif ($media->getKind() === "application") {
+                $this->addTransportDescription($media, $this->sctp->getDtlsTransport());
+            }
+        }
+
+        if ($sessionDescription->isType("answer")) {
+            $this->currentLocalDescription = $sessionDescription;
+            $this->pendingLocalDescription = null;
+        } else {
+            $this->pendingLocalDescription = $sessionDescription;
+        }
+
+        async(fn() => $this->connect())();
     }
 
     /**
      * Sets the remote description for the connection.
      *
      * @param RTCSessionDescription $sessionDescription The description to set
-     * @return PromiseInterface Promise that resolves when complete
+     * @return void Returns once complete
      */
-    public function setRemoteDescription(RTCSessionDescription $sessionDescription): PromiseInterface
+    public function setRemoteDescription(RTCSessionDescription $sessionDescription): void
     {
-        return async(function () use ($sessionDescription) {
-            $this->debug(sprintf("setRemoteDescription(%s)\n%s", $sessionDescription->getType(), $sessionDescription->getSdp()));
-            $sdp = SessionDescription::decode($sessionDescription->getSdp());
-            $sdp->setType($sessionDescription->getType());
-            $this->validateDescription($sdp, false);
-            $iceCandidates = [];
-            /* @var RTCTrackEvent[] $trackEvents */
-            $trackEvents = [];
-            foreach ($sdp->getMedia() as $index => $media) {
-                $dtlsTransport = null;
-                $this->seenMids[$media->getRtp()->muxId] = true;
-                if (in_array($media->getKind(), ["audio", "video"])) {
-                    [$trackEvents [], $dtlsTransport] = $this->getTrackEventAndDtlsTransport($index, $media, $sdp);
-                } elseif ($media->getKind() === "application") {
-                    $dtlsTransport = $this->getSctpDtlsTransport($index, $media);
-                }
-
-                if (isset($dtlsTransport)) {
-                    $this->handleTransports($dtlsTransport, $sdp, $media, $iceCandidates);
-                }
-            }
-            $bundleGroupDescriptions = array_filter($sdp->getGroup(), fn(GroupDescription $group) => $group->semantic === "BUNDLE");
-            $bundleGroupDescription = $bundleGroupDescriptions[0] ?? null;
-
-            if ($bundleGroupDescription && !empty($bundleGroupDescription->items)) {
-                $this->removeBundleTransport($bundleGroupDescription, $iceCandidates);
+        $this->debug(sprintf("setRemoteDescription(%s)\n%s", $sessionDescription->getType(), $sessionDescription->getSdp()));
+        $sdp = SessionDescription::decode($sessionDescription->getSdp());
+        $sdp->setType($sessionDescription->getType());
+        $this->validateDescription($sdp, false);
+        $iceCandidates = [];
+        /* @var RTCTrackEvent[] $trackEvents */
+        $trackEvents = [];
+        foreach ($sdp->getMedia() as $index => $media) {
+            $dtlsTransport = null;
+            $this->seenMids[$media->getRtp()->muxId] = true;
+            if (in_array($media->getKind(), ["audio", "video"])) {
+                [$trackEvents [], $dtlsTransport] = $this->getTrackEventAndDtlsTransport($index, $media, $sdp);
+            } elseif ($media->getKind() === "application") {
+                $dtlsTransport = $this->getSctpDtlsTransport($index, $media);
             }
 
-            foreach ($iceCandidates as [$iceCandidate, $media]) {
-                $this->addRemoteCandidates($iceCandidate, $media);
+            if (isset($dtlsTransport)) {
+                $this->handleTransports($dtlsTransport, $sdp, $media, $iceCandidates);
             }
+        }
+        $bundleGroupDescriptions = array_filter($sdp->getGroup(), fn(GroupDescription $group) => $group->semantic === "BUNDLE");
+        $bundleGroupDescription = $bundleGroupDescriptions[0] ?? null;
 
-            foreach ($trackEvents as $trackEvent) {
-                if ($trackEvent !== null) {
-                    $this->emit("track", [$trackEvent->track]);
-                }
+        if ($bundleGroupDescription && !empty($bundleGroupDescription->items)) {
+            $this->removeBundleTransport($bundleGroupDescription, $iceCandidates);
+        }
+
+        foreach ($iceCandidates as [$iceCandidate, $media]) {
+            $this->addRemoteCandidates($iceCandidate, $media);
+        }
+
+        foreach ($trackEvents as $trackEvent) {
+            if ($trackEvent !== null) {
+                $this->emit("track", [$trackEvent->track]);
             }
+        }
 
-            if ($sdp->isType("offer")) {
-                $this->setSignalingState(SignalingState::haveRemoteOffer);
-            } elseif ($sdp->isType("answer")) {
-                $this->setSignalingState(SignalingState::stable);
+        if ($sdp->isType("offer")) {
+            $this->setSignalingState(SignalingState::haveRemoteOffer);
+        } elseif ($sdp->isType("answer")) {
+            $this->setSignalingState(SignalingState::stable);
 
-            }
+        }
 
-            if ($sdp->isType("answer")) {
-                $this->currentRemoteDescription = $sdp;
-                $this->pendingRemoteDescription = null;
-            } else {
-                $this->pendingRemoteDescription = $sdp;
-            }
+        if ($sdp->isType("answer")) {
+            $this->currentRemoteDescription = $sdp;
+            $this->pendingRemoteDescription = null;
+        } else {
+            $this->pendingRemoteDescription = $sdp;
+        }
 
-            async(fn() => $this->connect())();
+        async(fn() => $this->connect())();
 
-        })();
     }
 
     /**

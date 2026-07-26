@@ -6,10 +6,7 @@ use Webrtc\AVCodec\AVCodec;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
-use React\EventLoop\Loop;
-use React\EventLoop\LoopInterface;
-use React\Promise\Promise;
-use React\Promise\PromiseInterface;
+use Revolt\EventLoop;
 use Webrtc\DataChannel\Enum\State;
 use Webrtc\DataChannel\RTCDataChannel;
 use Webrtc\ICE\Enum\IceGatheringState;
@@ -19,7 +16,7 @@ use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
 use Webrtc\Webrtc\RTCConfiguration;
 use Webrtc\Webrtc\RTCPeerConnection;
-use function React\Async\delay;
+use function Amp\delay;
 
 #[UsesClass(RTCConfiguration::class)]
 #[CoversClass(RTCPeerConnection::class)]
@@ -50,7 +47,6 @@ class RTCPeerConnectionBaseTest extends TestCase
 
     protected RTCPeerConnection $pc;
     protected string $longData;
-    protected ?LoopInterface $loop;
 
     protected function setUp(): void
     {
@@ -63,17 +59,12 @@ class RTCPeerConnectionBaseTest extends TestCase
         parent::setUp();
         $this->pc = new RTCPeerConnection();
         $this->longData = str_repeat("\xff", 2000);
-        $this->loop = Loop::get();
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
 
-        // setUp() can skip before the fixture exists, and tearDown() still runs.
-        if (isset($this->loop)) {
-            $this->loop->run();
-        }
     }
 
     public function testConstruct(): void
@@ -145,12 +136,8 @@ class RTCPeerConnectionBaseTest extends TestCase
         $this->assertEquals(State::Closed, $dc->getReadyState());
     }
 
-    protected function asyncSleep(float $seconds): PromiseInterface
+    protected function asyncSleep(float $seconds): void
     {
-        return new Promise(function ($resolve) use ($seconds) {
-            $this->loop->addTimer($seconds, function () use ($resolve) {
-                $resolve(true);
-            });
-        });
+        delay($seconds);
     }
 }
