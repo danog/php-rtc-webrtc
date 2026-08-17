@@ -15,6 +15,7 @@ use DateInvalidOperationException;
 use Evenement\EventEmitter;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
+use Revolt\EventLoop;
 use Random\RandomException;
 use Throwable;
 use Webrtc\Codecs\Codec;
@@ -78,8 +79,6 @@ use Webrtc\Stats\RTCStatsReport;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
-use function Amp\async;
-use function Amp\delay;
 
 /**
  * RTCPeerConnection represents a WebRTC connection between the local device and a remote peer.
@@ -239,6 +238,16 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
      * Logger instance for debugging output (optional)
      */
     private ?LoggerInterface $logger = null;
+
+    /**
+     * Whether a scheduled connect() is currently running.
+     */
+    private bool $connecting = false;
+
+    /**
+     * Whether a description was applied while connect() was running.
+     */
+    private bool $connectPending = false;
 
     /**
      * Creates a new RTCPeerConnection instance.
@@ -507,20 +516,14 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
 
         foreach ($this->transceivers as $transceiver) {
             $transceiver->stop();
-            $transceiver->getDtlsTransport()->stop()
-                ->then(function () use ($transceiver) {
-                    delay(.01);
-                    $transceiver->getDtlsTransport()->getIceTransport()->stop();
-                });
+            $transceiver->getDtlsTransport()->stop();
+            $transceiver->getDtlsTransport()->getIceTransport()->stop();
         }
 
         if (isset($this->sctp)) {
             $this->sctp->stop();
-            $this->sctp->getDtlsTransport()->stop()
-                ->then(function () {
-                    delay(.01);
-                    $this->sctp->getDtlsTransport()->getIceTransport()->stop();
-                });
+            $this->sctp->getDtlsTransport()->stop();
+            $this->sctp->getDtlsTransport()->getIceTransport()->stop();
         }
 
         $this->isClosed = true;
@@ -976,7 +979,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
             $this->pendingLocalDescription = $sessionDescription;
         }
 
-        async(fn() => $this->connect())();
+        $this->scheduleConnect();
     }
 
     /**
@@ -1038,7 +1041,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
             $this->pendingRemoteDescription = $sdp;
         }
 
-        async(fn() => $this->connect())();
+        $this->scheduleConnect();
 
     }
 
@@ -1260,7 +1263,8 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
 
         // stop and discard old ICE transports
         foreach ($oldTransports as $dtlsTransport) {
-            $dtlsTransport->stop()->then(fn() => $dtlsTransport->getIceTransport()->stop());
+            $dtlsTransport->stop();
+            $dtlsTransport->getIceTransport()->stop();
             unset($this->dtlsTransports[spl_object_id($dtlsTransport)]);
             unset($this->iceTransports[spl_object_id($dtlsTransport->getIceTransport())]);
             unset($iceCandidates[spl_object_id($dtlsTransport->getIceTransport())]);
@@ -1268,6 +1272,37 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
         $this->updateIceGatheringState();
         $this->updateIceConnectionState();
         $this->updateConnectionState();
+    }
+
+    /**
+     * Runs {@see self::connect()} off the current fiber.
+     *
+     * The ICE and DTLS handshakes both block until they are done, so applying a description must
+     * not wait for them.
+     */
+    private function scheduleConnect(): void
+    {
+        if ($this->connecting) {
+            // connect() only ever starts transports that are still new, so a second concurrent run
+            // would race the first one over the same handshakes: re-run it afterwards instead.
+            $this->connectPending = true;
+            return;
+        }
+        $this->connecting = true;
+        EventLoop::queue(function (): void {
+            try {
+                do {
+                    $this->connectPending = false;
+                    $this->connect();
+                } while ($this->connectPending && !$this->isClosed);
+            } catch (Throwable $e) {
+                $this->logger?->error("RTCPeerConnection(" . spl_object_id($this) . "): could not connect: $e");
+            } finally {
+                $this->connecting = false;
+            }
+            $this->updateIceConnectionState();
+            $this->updateConnectionState();
+        });
     }
 
     /**
@@ -1286,7 +1321,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
 
             if (!empty($iceTransport->getIceGatherer()->getLocalCandidates()) && isset($this->remoteIceParameters[spl_object_id($transceiver)])) {
                 if ($iceTransport->getState() === IceTransportState::new) {
-                    await($iceTransport->start($this->remoteIceParameters[spl_object_id($transceiver)]));
+                    $iceTransport->start($this->remoteIceParameters[spl_object_id($transceiver)]);
                 }
 
                 if ($dtlsTransport->getState() == TLSState::NEW && $iceTransport->getState() == IceTransportState::complete) {
@@ -1309,7 +1344,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
             $iceTransport = $dtlsTransport->getIceTransport();
             if ($iceTransport->getIceGatherer()->getLocalCandidates() && isset($this->remoteIceParameters[spl_object_id($this->sctp)])) {
                 if ($iceTransport->getState() === IceTransportState::new) {
-                    await($iceTransport->start($this->remoteIceParameters[spl_object_id($this->sctp)]));
+                    $iceTransport->start($this->remoteIceParameters[spl_object_id($this->sctp)]);
                 }
                 if ($dtlsTransport->getState() == TLSState::NEW && $iceTransport->getState() == IceTransportState::complete) {
                     $dtlsTransport->start($this->remoteDtlsParameter[spl_object_id($this->sctp)]->fingerprints);
@@ -1393,9 +1428,13 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
         if (count($media->getSsrc()) > 0) {
             $encoding = [];
             foreach ($transceiver->getCodecs() as $codec) {
-                if (str_starts_with(strtolower($codec->mimeType), "rtx")) {
-                    if (in_array($codec->parameters["apt"], $encoding) && count($media->getSsrc()) === 2) {
-                        $encoding[$codec->parameters["apt"]]->setRtx(new RTCRtpRtxParameters($media->getSsrc()[1]->ssrc));
+                if (CodecUtility::isRtx($codec)) {
+                    // A retransmission stream is not an encoding of its own: it is the second SSRC
+                    // of the FID group, and belongs to the encoding of the codec it repeats. The
+                    // lookup is by payload type, which is how $encoding is keyed.
+                    $apt = CodecUtility::apt($codec);
+                    if ($apt !== null && isset($encoding[$apt]) && count($media->getSsrc()) === 2) {
+                        $encoding[$apt]->setRtx(new RTCRtpRtxParameters($media->getSsrc()[1]->ssrc));
                         continue;
                     }
                 }
@@ -1534,7 +1573,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
                     // add corresponding RTX
                     if ($rtxEnabled) {
                         foreach ($rtxCodecs as $rtx) {
-                            if ($rtx->parameters["apt"] === $codec->payloadType) {
+                            if (CodecUtility::apt($rtx) === $codec->payloadType) {
                                 $filtered[] = $rtx;
                                 break;
                             }
