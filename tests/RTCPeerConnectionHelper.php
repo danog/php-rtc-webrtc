@@ -3,10 +3,29 @@
 namespace Tests\Webrtc\Webrtc;
 
 use Webrtc\SDP\RTCSessionDescription;
+use Webrtc\Webrtc\RTCConfigurationInterface;
 use Webrtc\Webrtc\RTCPeerConnection;
 
 class RTCPeerConnectionHelper
 {
+    /**
+     * Create a peer connection whose receivers expose encoded media.
+     */
+    public static function createPeerConnection(null|array|RTCConfigurationInterface $configuration = null): RTCPeerConnection
+    {
+        $pc = new RTCPeerConnection($configuration);
+        $pc->on('track', function ($track) use ($pc): void {
+            foreach ($pc->getReceivers() as $receiver) {
+                if ($receiver->getTrack() === $track) {
+                    $receiver->setRawMode(true);
+                    return;
+                }
+            }
+        });
+
+        return $pc;
+    }
+
     /**
      * Get media stream IDs (mids) from peer connection
      */

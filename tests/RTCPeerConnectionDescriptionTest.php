@@ -8,8 +8,6 @@ use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\Exception\RuntimeException;
 use Webrtc\ICE\Enum\IceGatheringState;
-use Webrtc\RTP\MediaStreamTrack\AudioStreamTrack;
-use Webrtc\RTP\MediaStreamTrack\VideoStreamTrack;
 use Webrtc\SDP\RTCSessionDescription;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
@@ -25,7 +23,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 {
     public function testCreateAnswerClosed()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
         $pc->close();
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("RTCPeerConnection is closed");
@@ -34,7 +32,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testCreateAnswerWithoutOffer()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot create answer in signaling state stable");
         $pc->createAnswer();
@@ -42,7 +40,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testCreateOfferClosed()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
         $pc->close();
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("RTCPeerConnection is closed");
@@ -51,7 +49,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testCreateOfferWithoutMedia()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Cannot create an offer with no media and no data channels");
         $pc->createOffer();
@@ -59,8 +57,8 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetLocalDescriptionUnexpectedAnswer()
     {
-        $pc = new RTCPeerConnection();
-        $pc->addTrack(new AudioStreamTrack());
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
+        $pc->addTrack(new PreEncodedAudioStreamTrack());
         $answer = $pc->createOffer();
         $answer->setType("answer");
         $this->expectException(InvalidArgumentException::class);
@@ -70,11 +68,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetLocalDescriptionUnexpectedOffer()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         // apply offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $pc1->setLocalDescription(await($pc1->createOffer()));
         $pc2->setRemoteDescription($pc1->getLocalDescription());
 
@@ -94,9 +92,9 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionNoCommonAudio()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
 
         $mangledSdp = [];
@@ -125,9 +123,9 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionNoCommonVideo()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
-        $pc1->addTrack(new VideoStreamTrack());
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc1->addTrack(new PreEncodedVideoStreamTrack());
         $offer = $pc1->createOffer();
 
         $mangled = new RTCSessionDescription(
@@ -149,11 +147,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionMediaMismatch()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         // apply offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $pc1->setLocalDescription($offer);
         $pc2->setRemoteDescription($pc1->getLocalDescription());
@@ -180,11 +178,11 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionWithInvalidDtlsSetupForAnswer()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         // apply offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $pc1->setLocalDescription($offer);
         $pc2->setRemoteDescription($pc1->getLocalDescription());
@@ -211,10 +209,10 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionWithoutIceCredentials()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $pc1->setLocalDescription($offer);
 
@@ -241,10 +239,10 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionWithoutRtcpMux()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $pc1->setLocalDescription($offer);
 
@@ -271,7 +269,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionUnexpectedAnswer()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
 
         async(function () use ($pc) {
             delay(.1);
@@ -285,8 +283,8 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionUnexpectedOffer()
     {
-        $pc = new RTCPeerConnection();
-        $pc->addTrack(new AudioStreamTrack());
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
+        $pc->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc->createOffer();
         $pc->setLocalDescription($offer);
 
@@ -303,8 +301,8 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
     public function testSetRemoteDescriptionMediaDatachannelBundled()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         $pc1States = [];
         $pc2States = [];
@@ -327,7 +325,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
          */
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat", protocol: ""));
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());

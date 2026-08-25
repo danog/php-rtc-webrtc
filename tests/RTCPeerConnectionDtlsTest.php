@@ -7,7 +7,6 @@ use PHPUnit\Framework\Attributes\UsesClass;
 use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\ICE\Enum\IceGatheringState;
 use Webrtc\RTP\Enum\MediaKind;
-use Webrtc\RTP\MediaStreamTrack\VideoStreamTrack;
 use Webrtc\SDP\Enum\DtlsRole;
 use Webrtc\SDP\Enum\SDPDirections;
 use Webrtc\SDP\RTCSessionDescription;
@@ -23,8 +22,8 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 {
     public function testDtlsRoleOfferActpass()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         $pc1States = [];
         $pc2States = [];
@@ -90,8 +89,8 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
     public function testDtlsRoleOfferPassive()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         $pc1States = [];
         $pc2States = [];
@@ -161,8 +160,8 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
     public function testDtlsRoleOfferActive()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         $pc1States = [];
         $pc2States = [];
@@ -233,8 +232,8 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
     public function testRightMidOrder()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         $tr1A = $pc1->addTransceiver(MediaKind::Video, SDPDirections::recvonly);
         $tr1B = $pc1->addTransceiver(MediaKind::Video, SDPDirections::recvonly);
@@ -243,8 +242,8 @@ class RTCPeerConnectionDtlsTest extends RTCPeerConnectionBaseTest
 
         $pc1->setLocalDescription($offer);
 
-        $tr2A = $pc2->addTransceiver(new VideoStreamTrack());
-        $tr2B = $pc2->addTransceiver(new VideoStreamTrack());
+        $tr2A = $pc2->addTransceiver(new PreEncodedVideoStreamTrack());
+        $tr2B = $pc2->addTransceiver(new PreEncodedVideoStreamTrack());
         $pc2->setRemoteDescription($offer);
 
         $this->assertEquals($tr1A->getMid(), $tr2A->getMid());
