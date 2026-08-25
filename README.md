@@ -42,7 +42,7 @@ All internal Composer dependencies use their `danog/php-rtc-*` package names dir
 
 This package is part of the PHP WebRTC library. For complete documentation, examples, and API reference, visit:
 
-[PHP WebRTC Documentation](https://www.quasarstream.com/php-webrtc)
+[PHP WebRTC Documentation](https://github.com/danog/php-rtc-webrtc)
 
 ## Credits
 
@@ -69,7 +69,7 @@ guide for detailed instructions on how to get involved. Together, we can make a 
 ### Our Plans for the Future
 We are not stopping here. We're actively continuing development on the PHP WebRTC packages.
 
-Right now, we're working privately on a **[Selective Forwarding Unit (SFU)](https://quasarstream.com/blog/sfu/)** implementation and a **Laravel package that bundles everything together**, including this WebRTC package. Once that's ready, our goal is to build a **minimal video conferencing web** app using Laravel, and to continue maintaining this repository along with 24 other related packages.
+Right now, we're working privately on a **Selective Forwarding Unit (SFU)** implementation and a **Laravel package that bundles everything together**, including this WebRTC package. Once that's ready, our goal is to build a **minimal video conferencing web** app using Laravel, and to continue maintaining this repository along with 24 other related packages.
 
 If you're interested in building real-time communication tools in PHP, like a video conferencing app, you are more than welcome to join the project. Fork the repos, contribute to them, and help grow this community.
 
