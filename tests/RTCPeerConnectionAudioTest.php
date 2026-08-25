@@ -5,12 +5,12 @@ namespace Tests\Webrtc\Webrtc;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use Amp\DeferredFuture;
+use Webrtc\AVCodec\AVCodec;
 use Webrtc\Codecs\Codec;
 use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\ICE\Enum\IceGatheringState;
 use Webrtc\RTP\Enum\MediaKind;
 use Webrtc\RTP\MediaStreamTrack\AudioStreamTrack;
-use Webrtc\RTP\MediaStreamTrack\VideoStreamTrack;
 use Webrtc\SDP\Enum\SDPDirections;
 use Webrtc\Stats\RTCStatsReport;
 use Webrtc\Webrtc\Enum\ConnectionState;
@@ -47,7 +47,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $track1 = new AudioStreamTrack();
+        $track1 = new PreEncodedAudioStreamTrack();
         $pc1->addTrack($track1);
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
@@ -81,7 +81,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals($track1->getId(), $pc2Tracks[0]->getId());
 
         // create answer
-        $track2 = new AudioStreamTrack();
+        $track2 = new PreEncodedAudioStreamTrack();
         $pc2->addTrack($track2);
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
@@ -177,15 +177,15 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 
     public function testConnectAudioBidirectionalOrg()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $this->testConnectAudioBidirectional($pc1, $pc2);
     }
 
     public function testConnectAudioBidirectionalWithEmptyIceServers()
     {
-        $pc1 = new RTCPeerConnection([]);
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection([]);
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $this->testConnectAudioBidirectional($pc1, $pc2);
     }
 
@@ -194,8 +194,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -211,7 +211,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -239,7 +239,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
@@ -328,14 +328,14 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
         // create offer
-        $track1 = new AudioStreamTrack();
+        $track1 = new PreEncodedAudioStreamTrack();
         $pc1->addTrack($track1);
         $offer = $pc1->createOffer();
         $pc1->setLocalDescription($offer);
@@ -344,7 +344,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         // create answer
-        $track2 = new AudioStreamTrack();
+        $track2 = new PreEncodedAudioStreamTrack();
         $pc2->addTrack($track2);
         $answer = $pc2->createAnswer();
         $pc2->setLocalDescription($answer);
@@ -401,12 +401,18 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 
     public function testConnectAudioCodecPreferencesOffer()
     {
+        if (!AVCodec::isAvailable()) {
+            self::markTestSkipped(
+                'PCMA/PCMU media-flow coverage encodes raw audio frames through AVCodec.'
+            );
+        }
+
         $pc1States = [];
         $pc2States = [];
 
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -558,8 +564,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -575,8 +581,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // add audio tracks immediately
-        $pc1->addTrack(new AudioStreamTrack());
-        $pc2->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
 
         // create offer
         $offer = $pc1->createOffer();
@@ -676,8 +682,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -791,8 +797,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -833,7 +839,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
@@ -907,8 +913,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -924,7 +930,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $pc1->addTransceiver(new AudioStreamTrack(), SDPDirections::sendonly);
+        $pc1->addTransceiver(new PreEncodedAudioStreamTrack(), SDPDirections::sendonly);
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -1022,8 +1028,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -1039,7 +1045,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -1139,8 +1145,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -1157,7 +1163,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -1255,8 +1261,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -1272,8 +1278,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -1298,7 +1304,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
@@ -1367,8 +1373,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection([]);
-        $pc2 = new RTCPeerConnection([]);
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection([]);
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection([]);
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -1384,8 +1390,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
-        $pc1->addTrack(new VideoStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
+        $pc1->addTrack(new PreEncodedVideoStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -1405,8 +1411,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
-        $pc2->addTrack(new VideoStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
+        $pc2->addTrack(new PreEncodedVideoStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
@@ -1475,8 +1481,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -1492,8 +1498,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
-        $pc1->addTrack(new VideoStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
+        $pc1->addTrack(new PreEncodedVideoStreamTrack());
         $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat", protocol: "bob"));
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
@@ -1515,8 +1521,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1", "2"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
-        $pc2->addTrack(new VideoStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
+        $pc2->addTrack(new PreEncodedVideoStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
@@ -1595,8 +1601,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -1612,8 +1618,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertNull($pc2->getRemoteDescription());
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
-        $pc1->addTrack(new VideoStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
+        $pc1->addTrack(new PreEncodedVideoStreamTrack());
         $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat", protocol: "bob"));
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
@@ -1639,8 +1645,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1", "2"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
-        $pc2->addTrack(new VideoStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
+        $pc2->addTrack(new PreEncodedVideoStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
@@ -1716,8 +1722,8 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $pc1States = [];
         $pc2States = [];
 
-        $pc1 = new RTCPeerConnection([]);
-        $pc2 = new RTCPeerConnection([]);
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection([]);
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection([]);
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
@@ -1735,7 +1741,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         // 1. AUDIO ONLY
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -1757,7 +1763,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());
@@ -1782,7 +1788,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         // 2. ADD VIDEO
 
         // create offer
-        $pc1->addTrack(new VideoStreamTrack());
+        $pc1->addTrack(new PreEncodedVideoStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=audio ", $offer->getSdp());
@@ -1802,7 +1808,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new VideoStreamTrack());
+        $pc2->addTrack(new PreEncodedVideoStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=audio ", $answer->getSdp());

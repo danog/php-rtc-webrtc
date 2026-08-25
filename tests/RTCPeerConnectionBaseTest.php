@@ -2,7 +2,6 @@
 
 namespace Tests\Webrtc\Webrtc;
 
-use Webrtc\AVCodec\AVCodec;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
 use PHPUnit\Framework\TestCase;
@@ -50,14 +49,8 @@ class RTCPeerConnectionBaseTest extends TestCase
 
     protected function setUp(): void
     {
-        if (!AVCodec::isAvailable()) {
-            self::markTestSkipped(
-                'Transcoding needs the FFI extension and an FFmpeg build matching the bundled headers.'
-            );
-        }
-
         parent::setUp();
-        $this->pc = new RTCPeerConnection();
+        $this->pc = RTCPeerConnectionHelper::createPeerConnection();
         $this->longData = str_repeat("\xff", 2000);
     }
 

@@ -10,7 +10,6 @@ use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\Exception\RuntimeException;
 use Webrtc\ICE\Enum\IceGatheringState;
-use Webrtc\RTP\MediaStreamTrack\AudioStreamTrack;
 use Webrtc\SCTP\SctpUtility;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
@@ -25,8 +24,8 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 {
     public function testConnectDatachannelAndCloseImmediately()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         // create two data channels
         $dc1 = $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat"));
@@ -60,8 +59,8 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelNegotiatedAndCloseImmediately()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         // create two data channels
         $dc1 = $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat1", negotiated: true, id: 100));
@@ -95,14 +94,14 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelLegacySdp()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1->setSctpLegacySdp(true);
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         /** @var RTCDataChannel[] $pc2DataChannels */
         $pc2DataChannels = [];
         $pc2DataMessages = [];
@@ -265,14 +264,14 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelModernSdp()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1->setSctpLegacySdp(false);
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         /** @var RTCDataChannel[] $pc2DataChannels */
         $pc2DataChannels = [];
         $pc2DataMessages = [];
@@ -431,14 +430,14 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelModernSdpNegotiated()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1->setSctpLegacySdp(false);
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $pc2DataMessages = [];
         $pc2States = [];
 
@@ -589,8 +588,8 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelRecycleStreamId()
     {
-        $pc1 = new RTCPeerConnection();
-        $pc2 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
 
         // create three data channels
         $dc1 = $pc1->createDataChannel(new RTCDataChannelParameters(label: "chat1"));
@@ -633,7 +632,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testCreateDatachannelWithMaxpacketlifetimeAndMaxretransmits()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Cannot specify both maxPacketLifeTime and maxRetransmits");
         $pc->createDataChannel(new RTCDataChannelParameters(label: "chat", maxPacketLifeTime: 500, maxRetransmits: 0));
@@ -641,7 +640,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testDatachannelBufferedamountlowthreshold()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
         $dc = $pc->createDataChannel(new RTCDataChannelParameters(label: "chat"));
         $this->assertEquals(0, $dc->getBufferedAmountLowThreshold());
 
@@ -671,7 +670,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testDatachannelSendInvalidState()
     {
-        $pc = new RTCPeerConnection();
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
         $dc = $pc->createDataChannel(new RTCDataChannelParameters(label: "chat"));
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Data channel is not open");
@@ -680,13 +679,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelThenAudio()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $pc2DataChannels = [];
         $pc2DataMessages = [];
         $pc2States = [];
@@ -801,7 +800,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         // 2. ADD AUDIO
 
         // create offer
-        $pc1->addTrack(new AudioStreamTrack());
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
         $offer = $pc1->createOffer();
         $this->assertEquals("offer", $offer->getType());
         $this->assertStringContainsString("m=application ", $offer->getSdp());
@@ -821,7 +820,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(["0", "1"], RTCPeerConnectionHelper::mids($pc2));
 
         // create answer
-        $pc2->addTrack(new AudioStreamTrack());
+        $pc2->addTrack(new PreEncodedAudioStreamTrack());
         $answer = $pc2->createAnswer();
         $this->assertEquals("answer", $answer->getType());
         $this->assertStringContainsString("m=application ", $answer->getSdp());
@@ -951,13 +950,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelTrickle()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $pc2DataChannels = [];
         $pc2DataMessages = [];
         $pc2States = [];
@@ -1130,13 +1129,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelMaxPacketLifetime()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $pc2DataChannels = [];
         $pc2DataMessages = [];
         $pc2States = [];
@@ -1248,13 +1247,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelMaxRetransmits()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $pc2DataChannels = [];
         $pc2DataMessages = [];
         $pc2States = [];
@@ -1366,13 +1365,13 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
     public function testConnectDatachannelUnordered()
     {
-        $pc1 = new RTCPeerConnection();
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
         $pc1DataMessages = [];
         $pc1States = [];
 
         RTCPeerConnectionHelper::trackStates($pc1, $pc1States);
 
-        $pc2 = new RTCPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
         $pc2DataChannels = [];
         $pc2DataMessages = [];
         $pc2States = [];
