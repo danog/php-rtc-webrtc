@@ -6,7 +6,7 @@
         "rtp",
         "webrtc"
     ],
-    "homepage": "https://www.quasarstream.com/webrtc",
+    "homepage": "https://github.com/danog/php-rtc-webrtc",
     "license": "BSD-3-Clause",
     "authors": [
         {
@@ -14,12 +14,10 @@
             "email": "github@aminyazdanpanah.com"
         },
         {
-            "name": "Sana Moniri",
-            "email": "s.mo@quasarstream.com"
+            "name": "Sana Moniri"
         },
         {
-            "name": "Quasar Stream Community",
-            "homepage": "https://quasarstream.com/teams"
+            "name": "Quasar Stream Community"
         }
     ],
     "require": {
