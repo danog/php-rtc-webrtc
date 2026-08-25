@@ -40,7 +40,6 @@
         "symfony/polyfill-php84": "^1.32"
     },
     "require-dev": {
-        "phpunit/php-code-coverage": "11.0.x-dev",
         "phpunit/phpunit": "^11.3"
     },
     "autoload": {
