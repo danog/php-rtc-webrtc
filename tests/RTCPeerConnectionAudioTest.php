@@ -4,7 +4,6 @@ namespace Tests\Webrtc\Webrtc;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Amp\DeferredFuture;
 use Webrtc\AVCodec\AVCodec;
 use Webrtc\Codecs\Codec;
 use Webrtc\DataChannel\RTCDataChannelParameters;
@@ -1659,9 +1658,7 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertStringContainsString("m=video ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
 
-        $deferred = new DeferredFuture();
-        $pc2->on("iceconnectionstatechange", fn() => $deferred->resolve(true));
-        await($deferred->promise());
+        $this->waitUntil(fn() => $pc2->getIceConnectionState() === IceConnectionState::failed);
 
         // check the outcome
         $this->assertEquals(IceConnectionState::closed, $pc1->getIceConnectionState());

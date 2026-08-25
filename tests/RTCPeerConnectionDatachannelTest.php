@@ -39,9 +39,9 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc2->getReadyState());
 
         // perform SDP exchange
-        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc1->setLocalDescription($pc1->createOffer());
         $pc2->setRemoteDescription($pc1->getLocalDescription());
-        $pc2->setLocalDescription(await($pc2->createAnswer()));
+        $pc2->setLocalDescription($pc2->createAnswer());
         $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome
@@ -74,9 +74,9 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc2->getReadyState());
 
         // perform SDP exchange
-        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc1->setLocalDescription($pc1->createOffer());
         $pc2->setRemoteDescription($pc1->getLocalDescription());
-        $pc2->setLocalDescription(await($pc2->createAnswer()));
+        $pc2->setLocalDescription($pc2->createAnswer());
         $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome
@@ -600,9 +600,9 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc3->getReadyState());
 
         // perform SDP exchange
-        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc1->setLocalDescription($pc1->createOffer());
         $pc2->setRemoteDescription($pc1->getLocalDescription());
-        $pc2->setLocalDescription(await($pc2->createAnswer()));
+        $pc2->setLocalDescription($pc2->createAnswer());
         $pc1->setRemoteDescription($pc2->getLocalDescription());
 
         // check the outcome

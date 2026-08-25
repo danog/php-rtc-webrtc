@@ -73,7 +73,7 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
 
         // apply offer
         $pc1->addTrack(new PreEncodedAudioStreamTrack());
-        $pc1->setLocalDescription(await($pc1->createOffer()));
+        $pc1->setLocalDescription($pc1->createOffer());
         $pc2->setRemoteDescription($pc1->getLocalDescription());
 
         async(function () use ($pc1, $pc2) {

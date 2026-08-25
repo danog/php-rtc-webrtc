@@ -21,20 +21,20 @@ use function Amp\delay;
 #[CoversClass(RTCPeerConnection::class)]
 class RTCPeerConnectionBaseTest extends TestCase
 {
-    protected const H264_SDP = "a=rtpmap:99 H264/90000\r\n" .
-    "a=rtcp-fb:99 nack\r\n" .
-    "a=rtcp-fb:99 nack pli\r\n" .
-    "a=rtcp-fb:99 goog-remb\r\n" .
-    "a=fmtp:99 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f\r\n" .
-    "a=rtpmap:100 rtx/90000\r\n" .
-    "a=fmtp:100 apt=99\r\n" .
-    "a=rtpmap:101 H264/90000\r\n" .
+    protected const H264_SDP = "a=rtpmap:101 H264/90000\r\n" .
     "a=rtcp-fb:101 nack\r\n" .
     "a=rtcp-fb:101 nack pli\r\n" .
     "a=rtcp-fb:101 goog-remb\r\n" .
-    "a=fmtp:101 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f\r\n" .
+    "a=fmtp:101 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f\r\n" .
     "a=rtpmap:102 rtx/90000\r\n" .
-    "a=fmtp:102 apt=101\r\n";
+    "a=fmtp:102 apt=101\r\n" .
+    "a=rtpmap:103 H264/90000\r\n" .
+    "a=rtcp-fb:103 nack\r\n" .
+    "a=rtcp-fb:103 nack pli\r\n" .
+    "a=rtcp-fb:103 goog-remb\r\n" .
+    "a=fmtp:103 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f\r\n" .
+    "a=rtpmap:104 rtx/90000\r\n" .
+    "a=fmtp:104 apt=103\r\n";
 
     // VP8 SDP parameters
     protected const VP8_SDP = "a=rtpmap:97 VP8/90000\r\n" .
@@ -91,7 +91,7 @@ class RTCPeerConnectionBaseTest extends TestCase
 
     protected function assertDataChannelOpen(RTCDataChannel $dc): void
     {
-        delay(.1);
+        $this->waitUntil(fn() => $dc->getReadyState() === State::Open);
         $this->assertEquals(State::Open, $dc->getReadyState());
     }
 
@@ -104,7 +104,12 @@ class RTCPeerConnectionBaseTest extends TestCase
 
     protected function assertIceCompleted(RTCPeerConnection $pc1, RTCPeerConnection $pc2): void
     {
-        delay(.1);
+        $this->waitUntil(fn() =>
+            $pc1->getIceConnectionState() === IceConnectionState::completed
+            && $pc2->getIceConnectionState() === IceConnectionState::completed
+            && $pc1->getConnectionState() === ConnectionState::connected
+            && $pc2->getConnectionState() === ConnectionState::connected
+        );
         $this->assertEquals(IceConnectionState::completed, $pc1->getIceConnectionState());
         $this->assertEquals(IceConnectionState::completed, $pc2->getIceConnectionState());
     }
@@ -125,8 +130,16 @@ class RTCPeerConnectionBaseTest extends TestCase
     protected function closeDataChannel(RTCDataChannel $dc): void
     {
         $dc->close();
-        delay(.1);
+        $this->waitUntil(fn() => $dc->getReadyState() === State::Closed);
         $this->assertEquals(State::Closed, $dc->getReadyState());
+    }
+
+    protected function waitUntil(callable $condition, float $timeout = 5.0): void
+    {
+        $deadline = microtime(true) + $timeout;
+        while (!$condition() && microtime(true) < $deadline) {
+            delay(.01);
+        }
     }
 
     protected function asyncSleep(float $seconds): void

@@ -4,7 +4,6 @@ namespace Tests\Webrtc\Webrtc;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
-use Amp\DeferredFuture;
 use Webrtc\Codecs\Codec;
 use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\ICE\Enum\IceGatheringState;
@@ -313,9 +312,7 @@ class RTCPeerConnectionVideoTest extends RTCPeerConnectionBaseTest
         $this->assertStringContainsString("m=video ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
 
-        $deferred = new DeferredFuture();
-        $pc2->on("iceconnectionstatechange", fn() => $deferred->resolve(true));
-        await($deferred->promise());
+        $this->waitUntil(fn() => $pc2->getIceConnectionState() === IceConnectionState::failed);
 
         // check the outcome
         $this->assertEquals(IceConnectionState::closed, $pc1->getIceConnectionState());
@@ -559,8 +556,6 @@ class RTCPeerConnectionVideoTest extends RTCPeerConnectionBaseTest
 
     public function testConnectVideoBidirectional()
     {
-        $videoSdp = self::VP8_SDP . self::H264_SDP;
-
         $pc1States = [];
         $pc2States = [];
 
@@ -616,7 +611,8 @@ class RTCPeerConnectionVideoTest extends RTCPeerConnectionBaseTest
         $pc2->setLocalDescription($answer);
         $this->assertIceChecking($pc2);
         $this->assertStringContainsString("m=video ", $pc2->getLocalDescription()->getSdp());
-        $this->assertStringContainsString($videoSdp, $pc2->getLocalDescription()->getSdp());
+        $this->assertStringContainsString(self::VP8_SDP, $pc2->getLocalDescription()->getSdp());
+        $this->assertStringContainsString(self::H264_SDP, $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("a=sendrecv", $pc2->getLocalDescription()->getSdp());
         $this->assertHasIceCandidates($pc2->getLocalDescription());
         $this->assertHasDtls($pc2->getLocalDescription(), "active");

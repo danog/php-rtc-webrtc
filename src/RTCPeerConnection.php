@@ -717,6 +717,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
     private function createSctpTransport(): void
     {
         $this->sctp = new RTCSctpTransport($this->createDtlsTransport());
+        $this->sctp->setLogger($this->logger);
 
         $this->sctp->on("datachannel", function ($dataChannel): void {
             $this->emit("datachannel", [$dataChannel]);
@@ -742,6 +743,7 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
 
         // create DTLS transport
         $dtlsTransport = new RTCDtlsTransport($iceTransport, $this->certificates[0]);
+        $dtlsTransport->setLogger($this->logger);
         $dtlsTransport->on("statechange", fn() => $this->updateConnectionState());
         $this->dtlsTransports[spl_object_id($dtlsTransport)] = $dtlsTransport;
 
@@ -1351,7 +1353,13 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
                 }
 
                 if ($dtlsTransport->getState() == TLSState::CONNECTED) {
-                    $this->sctp->start($this->sctpRemotePort);
+                    // Let the peer finish returning from its DTLS handshake and install its
+                    // application-data receiver before sending the first SCTP INIT packet.
+                    EventLoop::delay(.05, function (): void {
+                        if (!$this->isClosed && $this->sctpRemotePort !== null) {
+                            $this->sctp?->start($this->sctpRemotePort);
+                        }
+                    });
                 }
             }
         }
@@ -1427,18 +1435,27 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
 
         if (count($media->getSsrc()) > 0) {
             $encoding = [];
+            $rtx = [];
             foreach ($transceiver->getCodecs() as $codec) {
                 if (CodecUtility::isRtx($codec)) {
                     // A retransmission stream is not an encoding of its own: it is the second SSRC
                     // of the FID group, and belongs to the encoding of the codec it repeats. The
-                    // lookup is by payload type, which is how $encoding is keyed.
+                    // lookup is by payload type, which is how the encodings are keyed.
                     $apt = CodecUtility::apt($codec);
-                    if ($apt !== null && isset($encoding[$apt]) && count($media->getSsrc()) === 2) {
-                        $encoding[$apt]->setRtx(new RTCRtpRtxParameters($media->getSsrc()[1]->ssrc));
-                        continue;
+                    if ($apt !== null && count($media->getSsrc()) === 2) {
+                        $rtx[$apt] = new RTCRtpRtxParameters($media->getSsrc()[1]->ssrc);
                     }
+                    continue;
                 }
-                $encoding[$codec->payloadType] = new RTCRtpDecodingParameters($media->getSsrc()[0]->ssrc, $codec->payloadType);
+            }
+            foreach ($transceiver->getCodecs() as $codec) {
+                if (!CodecUtility::isRtx($codec)) {
+                    $encoding[$codec->payloadType] = new RTCRtpDecodingParameters(
+                        $media->getSsrc()[0]->ssrc,
+                        $codec->payloadType,
+                        $rtx[$codec->payloadType] ?? null,
+                    );
+                }
             }
             $rtp->encodings = $encoding;
         }
