@@ -19,6 +19,10 @@
         },
         {
             "name": "Quasar Stream Community"
+        },
+        {
+            "name": "Daniil Gentili",
+            "email": "daniil@daniil.it"
         }
     ],
     "require": {
