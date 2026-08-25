@@ -9,7 +9,7 @@ This package provides a complete WebRTC implementation written in PHP, including
 
 This is the `danog/php-rtc-webrtc` fork used by MadelineProto. It targets PHP 8.2+, replaces ReactPHP with Amp v3, uses pure-PHP DTLS/SRTP backed by phpseclib, and makes libav/libopus/libvpx FFI optional so already-encoded media can be sent without native codec bindings. It also fixes non-blocking offer/answer handshakes and RTX negotiation.
 
-The forked stack keeps the upstream `quasarstream/*` dependency constraints for compatibility. Each `danog/php-rtc-*` package replaces its upstream counterpart, so consumers select the complete maintained stack by requiring the corresponding danog packages together. MadelineProto requires the full set explicitly.
+All internal Composer dependencies use their `danog/php-rtc-*` package names directly, so installing a component selects the maintained danog packages throughout the dependency graph. MadelineProto requires the full set explicitly.
 
 ##  Features
 

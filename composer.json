@@ -25,14 +25,14 @@
     "require": {
         "php": "^8.2",
         "amphp/amp": "^3.1",
-        "quasarstream/exception": "^1.0",
-        "quasarstream/ice": "^1.0",
-        "quasarstream/rtp": "^1.0",
-        "quasarstream/sctp": "^1.0",
-        "quasarstream/stats": "^1.0",
-        "quasarstream/sdp": "^1.0",
-        "quasarstream/dtls": "^1.0",
-        "quasarstream/ntp": "^1.0",
+        "danog/php-rtc-exception": "^1.0",
+        "danog/php-rtc-ice": "^1.0",
+        "danog/php-rtc-rtp": "^1.0",
+        "danog/php-rtc-sctp": "^1.0",
+        "danog/php-rtc-stats": "^1.0",
+        "danog/php-rtc-sdp": "^1.0",
+        "danog/php-rtc-dtls": "^1.0",
+        "danog/php-rtc-ntp": "^1.0",
         "evenement/evenement": "^3.0",
         "symfony/polyfill-php84": "^1.32"
     },
@@ -61,8 +61,5 @@
             "php -r \"if (stripos(PHP_OS_FAMILY, 'Linux') === false) { fwrite(STDERR, 'This package only supports Linux.' . PHP_EOL); exit(1); }\""
         ]
     },
-    "minimum-stability": "dev",
-    "replace": {
-        "quasarstream/webrtc": "self.version"
-    }
+    "minimum-stability": "dev"
 }
