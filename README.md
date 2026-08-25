@@ -1,9 +1,15 @@
 # WebRTC In PHP
 
-[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.4-blue.svg)](https://php.net/)
+[![PHP Version](https://img.shields.io/badge/php-%3E%3D8.2-blue.svg)](https://php.net/)
 [![License](https://img.shields.io/badge/license-BSD-blue.svg)](LICENSE)
 
-This package provides a complete WebRTC implementation written entirely in PHP, including support for ICE, DTLS, SRTP, SCTP, RTP, and data channels. Designed for real-time audio, video, and data communication, it enables peer-to-peer connectivity without relying on external WebRTC libraries. Built with modular components and fully asynchronous using ReactPHP.
+This package provides a complete WebRTC implementation written in PHP, including support for ICE, DTLS, SRTP, SCTP, RTP, and data channels. Its modular components use Amp v3 fibers and Revolt for asynchronous, non-blocking operation.
+
+## About this fork
+
+This is the `danog/php-rtc-webrtc` fork used by MadelineProto. It targets PHP 8.2+, replaces ReactPHP with Amp v3, uses pure-PHP DTLS/SRTP backed by phpseclib, and makes libav/libopus/libvpx FFI optional so already-encoded media can be sent without native codec bindings. It also fixes non-blocking offer/answer handshakes and RTX negotiation.
+
+The forked stack keeps the upstream `quasarstream/*` dependency constraints for compatibility. Each `danog/php-rtc-*` package replaces its upstream counterpart, so consumers select the complete maintained stack by requiring the corresponding danog packages together. MadelineProto requires the full set explicitly.
 
 ##  Features
 
@@ -13,24 +19,23 @@ This package provides a complete WebRTC implementation written entirely in PHP, 
 - Reliable data transfer with SCTP and support for data channels
 - RTP/RTCP handling for real-time audio and video streaming
 - Modular design with support for custom signaling implementations
-- Built on top of ReactPHP for asynchronous, non-blocking performance
+- Built on Amp v3 fibers and Revolt for asynchronous, non-blocking performance
 
 
 ## Requirements
 
-- PHP ≥ 8.4 with FFI and GMP extension enabled
-- OpenSSL development libraries
-- Srtp development libraries
+- PHP ≥ 8.2
+- No FFI, GMP, OpenSSL development, or libsrtp dependency for signaling and already-encoded media
 - Linux environment (Windows/macOS support planned)
   - **Windows users:** Use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) or Docker Desktop.
       *Note: Native Windows support is planned for an upcoming releases (in a few months.).*
 
   - **macOS users:** Use an emulator like [UTM](https://mac.getutm.app/) or run the project using Docker.
   *Note: Native macOS support is coming in a few months.*
-- FFmpeg/libav shared libraries (libavcodec, libavfilter, etc.)
+- Optional FFmpeg/libav shared libraries (libavcodec, libavfilter, etc.) for transcoding
   - Compatible with FFmpeg **version 7.1.1**
-- libopus development libraries
-- libvpx development libraries
+- Optional libopus development libraries for audio encoding/decoding
+- Optional libvpx development libraries for VP8/VP9 encoding/decoding
   - Compatible with libvpx **version 1.15.0**
 
 ## Documentation

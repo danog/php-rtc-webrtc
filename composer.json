@@ -1,7 +1,7 @@
 {
     "name": "danog/php-rtc-webrtc",
     "type": "library",
-    "description": "This package provides a complete WebRTC implementation written entirely in PHP. Fork with FFI made optional and a pure-PHP DTLS/SRTP stack, maintained for MadelineProto.",
+  "description": "A modular PHP WebRTC stack for PHP 8.2+, ported to Amp v3 with pure-PHP DTLS/SRTP and optional media FFI. Maintained by danog for MadelineProto.",
     "keywords": [
         "rtp",
         "webrtc"
