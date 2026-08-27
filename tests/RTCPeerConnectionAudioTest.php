@@ -4,6 +4,7 @@ namespace Tests\Webrtc\Webrtc;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\UsesTrait;
 use Webrtc\AVCodec\AVCodec;
 use Webrtc\Codecs\Codec;
 use Webrtc\DataChannel\RTCDataChannelParameters;
@@ -165,6 +166,7 @@ use function Amp\delay;
     #[UsesClass(\Webrtc\Codecs\Video\X264\H264PayloadDescriptor::class)]
     #[UsesClass(\Webrtc\RTP\MediaStreamTrack\RemoteStreamTrack::class)]
     #[UsesClass(\Webrtc\RTP\Receiver\TimestampMapper::class)]
+    #[UsesTrait(\Webrtc\TURN\Trait\TurnConnection::class)]
 class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 {
     protected function testConnectAudioBidirectional(RTCPeerConnection $pc1, RTCPeerConnection $pc2): void

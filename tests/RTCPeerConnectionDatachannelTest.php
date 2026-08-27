@@ -4,6 +4,7 @@ namespace Tests\Webrtc\Webrtc;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\UsesClass;
+use PHPUnit\Framework\Attributes\UsesTrait;
 use Webrtc\DataChannel\Enum\State;
 use Webrtc\DataChannel\RTCDataChannel;
 use Webrtc\DataChannel\RTCDataChannelParameters;
@@ -164,7 +165,7 @@ use function Amp\delay;
     #[UsesClass(\Webrtc\Stats\RTCSentRtpStreamStats::class)]
     #[UsesClass(\Webrtc\Stats\RTCStatsReport::class)]
     #[UsesClass(\Webrtc\TURN\Turn::class)]
-    #[UsesClass(\Webrtc\TURN\Trait\TurnConnection::class)]
+    #[UsesTrait(\Webrtc\TURN\Trait\TurnConnection::class)]
 class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 {
     public function testConnectDatachannelAndCloseImmediately()

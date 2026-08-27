@@ -211,10 +211,7 @@ class RTCPeerConnectionTrackAndTransceiverTest extends TestCase
     {
         $pc = new RTCPeerConnection();
 
-        $wrongMediaTrack = $this->getMockBuilder(PreEncodedAudioStreamTrack::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getKind'])
-            ->getMock();
+        $wrongMediaTrack = $this->createStub(PreEncodedAudioStreamTrack::class);
         $wrongMediaTrack->method('getKind')->willReturn(MediaKind::Unknown);
 
         // try adding an invalid track
