@@ -2,21 +2,35 @@
 
 namespace Tests\Webrtc\Webrtc;
 
+use Override;
+use Revolt\EventLoop;
 use Webrtc\Codecs\EncodedPacket;
 use Webrtc\RTP\Enum\MediaKind;
 use Webrtc\RTP\MediaStreamTrack\MediaStreamTrack;
 
+use function Amp\delay;
+
 final class PreEncodedAudioStreamTrack extends MediaStreamTrack
 {
-    protected MediaKind $kind = MediaKind::Audio;
+    private const INTERVAL = 0.960;
 
-    private int $timestamp = 0;
-
-    public function receiveData(): EncodedPacket
+    public function __construct(?string $id = null)
     {
-        $packet = new EncodedPacket("\xf8\xff\xfe", $this->timestamp, audioLevel: 127);
-        $this->timestamp += 960;
+        parent::__construct(MediaKind::Audio, $id);
+        EventLoop::queue(function () {
+            $timestamp = 0;
+            while (!$this->isEnded()) {
+                $packet = new EncodedPacket("\xf8\xff\xfe", $timestamp, audioLevel: 127);
+                $this->frameQueue->push($packet);
+                $timestamp += 960;
+                delay(self::INTERVAL);
+            }
+        });
+    }
 
-        return $packet;
+    #[Override]
+    public function stop(): void
+    {
+        parent::stop();
     }
 }
