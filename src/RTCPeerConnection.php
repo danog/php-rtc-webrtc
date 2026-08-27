@@ -22,11 +22,11 @@ use Webrtc\Codecs\Codec;
 use Webrtc\Codecs\CodecUtility;
 use Webrtc\DataChannel\RTCDataChannel;
 use Webrtc\DataChannel\RTCDataChannelParameters;
-use Webrtc\DTLS\Exception\DTLSException;
-use Webrtc\DTLS\Exception\RTCCertificateException;
-use Webrtc\DTLS\Exception\TLSException;
-use Webrtc\DTLS\RTCCertificate;
-use Webrtc\DTLS\RTCDtlsTransport;
+use Webrtc\DTLS\DTLS\Exception\DTLSException;
+use Webrtc\DTLS\DTLS\Exception\RTCCertificateException;
+use Webrtc\DTLS\DTLS\Exception\TLSException;
+use Webrtc\DTLS\DTLS\RTCCertificate;
+use Webrtc\DTLS\DTLS\RTCDtlsTransport;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\Exception\RuntimeException;
 use Webrtc\ICE\Enum\IceGatheringState;
@@ -1348,18 +1348,28 @@ class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterfa
                 if ($iceTransport->getState() === IceTransportState::new) {
                     $iceTransport->start($this->remoteIceParameters[spl_object_id($this->sctp)]);
                 }
+
+                // The client sends its first SCTP INIT the instant its DTLS handshake
+                // completes, which can land before ours does. Register the server-side
+                // receiver up front — before dtlsTransport->start() blocks through the
+                // handshake — so the receiver is provably in place before either side can
+                // finish handshaking (and thus before any INIT can arrive), instead of
+                // betting a fixed delay covers the skew. start() is idempotent, so the
+                // CONNECTED branch below is a no-op on this side.
+                if ($this->sctp->isServer() && !$this->isClosed && $this->sctpRemotePort !== null) {
+                    $this->sctp->start($this->sctpRemotePort);
+                }
+
                 if ($dtlsTransport->getState() == TLSState::NEW && $iceTransport->getState() == IceTransportState::complete) {
                     $dtlsTransport->start($this->remoteDtlsParameter[spl_object_id($this->sctp)]->fingerprints);
                 }
 
                 if ($dtlsTransport->getState() == TLSState::CONNECTED) {
-                    // Let the peer finish returning from its DTLS handshake and install its
-                    // application-data receiver before sending the first SCTP INIT packet.
-                    EventLoop::delay(.05, function (): void {
-                        if (!$this->isClosed && $this->sctpRemotePort !== null) {
-                            $this->sctp?->start($this->sctpRemotePort);
-                        }
-                    });
+                    // Client side: emit the INIT now that DTLS carries application data.
+                    // Server side: already started above, so this is a no-op.
+                    if (!$this->isClosed && $this->sctpRemotePort !== null) {
+                        $this->sctp->start($this->sctpRemotePort);
+                    }
                 }
             }
         }
