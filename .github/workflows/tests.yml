@@ -13,6 +13,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         php: ["8.2", "8.3", "8.4", "8.5"]
@@ -47,12 +48,20 @@ jobs:
       - name: Run Psalm
         run: vendor/bin/psalm --no-progress
 
+      - name: Cache FFmpeg 9.0.1 build
+        id: ffmpeg-cache
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.tool_cache }}/ffmpeg-9.0.1
+          key: ffmpeg-9.0.1-ubuntu
+
       - name: Install FFmpeg 9.0.1 on Linux
         # The media-flow tests bind against the FFmpeg 9 headers bundled in the
         # AVCodec package, so the loaded libraries must be FFmpeg 9 too. Ubuntu's
-        # packaged FFmpeg is older, so build 9.0.1 from source. Windows/macOS have
-        # no matching build, so those tests skip (skip-tolerant config).
-        if: matrix.os == 'ubuntu-latest'
+        # packaged FFmpeg is older, so build 9.0.1 from source into a cached prefix.
+        # Windows/macOS have no matching build, so those tests skip (skip-tolerant).
+        if: matrix.os == 'ubuntu-latest' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt update
           sudo apt install -y \
@@ -64,17 +73,23 @@ jobs:
           git clone https://github.com/FFmpeg/FFmpeg.git
           cd FFmpeg
           git checkout n9.0.1
-          ./configure --enable-shared --enable-gpl --enable-nonfree \
+          ./configure --prefix="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1" \
+            --enable-shared --enable-gpl --enable-nonfree \
             --enable-libx264 --enable-libx265 --enable-libvpx \
             --enable-libfdk-aac --enable-libmp3lame --enable-libopus
           make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-          ffmpeg -version
+          make install
 
       - name: Run PHPUnit tests
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then
+            # Point the AVCodec bindings at the cached FFmpeg 9 build, since the
+            # system /usr/lib FFmpeg 6 would otherwise be picked up first.
+            FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
+            export LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:$LD_LIBRARY_PATH"
+            export LIB_AVCODEC_PATH="$FFMPEG_PREFIX/lib/libavcodec.so"
+            export LIB_AVFORMAT_PATH="$FFMPEG_PREFIX/lib/libavformat.so"
+            export LIB_AVFILTER_PATH="$FFMPEG_PREFIX/lib/libavfilter.so"
             vendor/bin/phpunit
           else
             vendor/bin/phpunit -c phpunit-skiptolerant.xml
