@@ -25,6 +25,9 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           tools: composer:v2
+          # The media-flow tests exercise the AVCodec FFI bindings.
+          extensions: ffi
+          ini-values: ffi.enable=true
 
       - name: Validate composer.json and composer.lock
         run: composer validate
@@ -44,5 +47,36 @@ jobs:
       - name: Run Psalm
         run: vendor/bin/psalm --no-progress
 
+      - name: Install FFmpeg 9.0.1 on Linux
+        # The media-flow tests bind against the FFmpeg 9 headers bundled in the
+        # AVCodec package, so the loaded libraries must be FFmpeg 9 too. Ubuntu's
+        # packaged FFmpeg is older, so build 9.0.1 from source. Windows/macOS have
+        # no matching build, so those tests skip (skip-tolerant config).
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            autoconf automake build-essential cmake git libtool \
+            pkg-config texinfo zlib1g-dev libx264-dev libx265-dev \
+            libvpx-dev libfdk-aac-dev libmp3lame-dev libopus-dev \
+            nasm
+
+          git clone https://github.com/FFmpeg/FFmpeg.git
+          cd FFmpeg
+          git checkout n9.0.1
+          ./configure --enable-shared --enable-gpl --enable-nonfree \
+            --enable-libx264 --enable-libx265 --enable-libvpx \
+            --enable-libfdk-aac --enable-libmp3lame --enable-libopus
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+          ffmpeg -version
+
       - name: Run PHPUnit tests
-        run: vendor/bin/phpunit
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            vendor/bin/phpunit
+          else
+            vendor/bin/phpunit -c phpunit-skiptolerant.xml
+          fi
+        shell: bash
