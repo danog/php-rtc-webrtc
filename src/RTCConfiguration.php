@@ -11,6 +11,7 @@
 
 namespace Webrtc\Webrtc;
 
+use Override;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\ICE\RTCIceServer;
 use Webrtc\ICE\RTCIceServerInterface;
@@ -34,7 +35,7 @@ use Webrtc\ICE\RTCICESetting;
  * $config->iceSettings()->setIcePortRange(40000, 50000);
  * ```
  */
-class RTCConfiguration implements RTCConfigurationInterface
+final class RTCConfiguration implements RTCConfigurationInterface
 {
     /**
      * Default STUN server URL used when no configuration is provided.
@@ -73,12 +74,17 @@ class RTCConfiguration implements RTCConfigurationInterface
     /**
      * Constructs a new RTCConfiguration instance
      *
-     * @param array|null $configuration Optional configuration array. If null,
+     * @param array{
+     *     iceServers?: list<array{
+     *         urls: string|list<string>,
+     *         username?: string,
+     *         credential?: string,
+     *         credentialType?: string
+     *     }>,
+     *     certificatePath?: string,
+     *     privateKeyPath?: string
+     * }|null $configuration Optional configuration array. If null,
      *        default configuration with a Google STUN server will be used.
-     *        Expected keys:
-     *        - 'iceServers': Array of ICE server configurations
-     *        - 'certificatePath': Path to a certificate file (optional)
-     *        - 'privateKeyPath': Path to a private key file (optional)
      * @throws InvalidArgumentException If iceServer configuration is invalid
      */
     public function __construct(?array $configuration = null)
@@ -92,6 +98,7 @@ class RTCConfiguration implements RTCConfigurationInterface
      *
      * @return array<RTCIceServerInterface> Array of configured ICE servers
      */
+    #[Override]
     public function getIceServers(): array
     {
         return $this->iceServers;
@@ -105,7 +112,7 @@ class RTCConfiguration implements RTCConfigurationInterface
      */
     public function setIceServers(array $iceServers): void
     {
-        array_walk($iceServers, fn($iceServer) => $this->addIceServer($iceServer));
+        array_walk($iceServers, fn(RTCIceServerInterface $iceServer) => $this->addIceServer($iceServer));
     }
 
     /**
@@ -124,6 +131,7 @@ class RTCConfiguration implements RTCConfigurationInterface
      *
      * @return string|null Path to the certificate file or null if not set
      */
+    #[Override]
     public function getCertificatePath(): ?string
     {
         return $this->certificatePath;
@@ -145,6 +153,7 @@ class RTCConfiguration implements RTCConfigurationInterface
      *
      * @return string|null Path to the private key file or null if not set
      */
+    #[\Override]
     public function getPrivateKeyPath(): ?string
     {
         return $this->privateKeyPath;
@@ -164,7 +173,16 @@ class RTCConfiguration implements RTCConfigurationInterface
     /**
      * Parses a configuration array and sets up the ICE servers and paths
      *
-     * @param array $configuration Configuration array with optional keys:
+     * @param array{
+     *     iceServers?: list<array{
+     *         urls: string|list<string>,
+     *         username?: string,
+     *         credential?: string,
+     *         credentialType?: string
+     *     }>,
+     *     certificatePath?: string,
+     *     privateKeyPath?: string
+     * } $configuration Configuration array with optional keys:
      *        - 'iceServers': Array of ICE server configurations (required if present)
      *        - 'certificatePath': Path to a certificate file (optional)
      *        - 'privateKeyPath': Path to a private key file (optional)
@@ -183,7 +201,7 @@ class RTCConfiguration implements RTCConfigurationInterface
                 $iceServerObj->setUrls($iceServer["urls"]);
                 $iceServerObj->setUsername($iceServer["username"] ?? null);
                 $iceServerObj->setCredential($iceServer["credential"] ?? null);
-                $iceServerObj->setCredentialType($iceServer["credentialType"] ?? null);
+                $iceServerObj->setCredentialType($iceServer["credentialType"] ?? "password");
 
                 $this->addIceServer($iceServerObj);
             }
@@ -213,6 +231,7 @@ class RTCConfiguration implements RTCConfigurationInterface
      *
      * @return RTCICESetting The ICE settings instance
      */
+    #[\Override]
     public function iceSettings(): RTCICESetting
     {
         return $this->iceSettings;

@@ -8,6 +8,7 @@ use Webrtc\DataChannel\RTCDataChannelParameters;
 use Webrtc\Exception\InvalidArgumentException;
 use Webrtc\Exception\RuntimeException;
 use Webrtc\ICE\Enum\IceGatheringState;
+use Webrtc\SDP\Enum\SDPDirections;
 use Webrtc\SDP\RTCSessionDescription;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
@@ -234,6 +235,72 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $pc2->setLocalDescription($offer);
     }
 
+    public function testLocalDescriptionRollback()
+    {
+        $pc = RTCPeerConnectionHelper::createPeerConnection();
+        $pc->addTrack(new PreEncodedAudioStreamTrack());
+        $pc->setLocalDescription($pc->createOffer());
+        $this->assertSame(SignalingState::haveLocalOffer, $pc->getSignalingState());
+
+        $pc->setLocalDescription(new RTCSessionDescription('', 'rollback'));
+
+        $this->assertSame(SignalingState::stable, $pc->getSignalingState());
+        $this->assertNull($pc->getLocalDescription());
+        $pc->setLocalDescription($pc->createOffer());
+        $pc->close();
+    }
+
+    public function testRemoteDescriptionRollback()
+    {
+        $offerer = RTCPeerConnectionHelper::createPeerConnection();
+        $answerer = RTCPeerConnectionHelper::createPeerConnection();
+        $offerer->addTrack(new PreEncodedAudioStreamTrack());
+        $offerer->setLocalDescription($offerer->createOffer());
+        $answerer->setRemoteDescription($offerer->getLocalDescription());
+        $this->assertSame(SignalingState::haveRemoteOffer, $answerer->getSignalingState());
+
+        $answerer->setRemoteDescription(new RTCSessionDescription('', 'rollback'));
+
+        $this->assertSame(SignalingState::stable, $answerer->getSignalingState());
+        $this->assertNull($answerer->getRemoteDescription());
+        $offerer->close();
+        $answerer->close();
+    }
+
+    public function testRenegotiatesVideoInBothDirections()
+    {
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
+        $pc1->setLocalDescription($pc1->createOffer());
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription($pc2->createAnswer());
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
+
+        $video = $pc1->addTransceiver(new PreEncodedVideoStreamTrack());
+        $pc1->setLocalDescription($pc1->createOffer());
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription($pc2->createAnswer());
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
+        $this->assertTrue($video->getSender()->isEnabled());
+
+        $video->setDirection(SDPDirections::recvonly);
+        $pc1->setLocalDescription($pc1->createOffer());
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription($pc2->createAnswer());
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
+        $this->assertFalse($video->getSender()->isEnabled());
+
+        $video->setDirection(SDPDirections::sendrecv);
+        $pc1->setLocalDescription($pc1->createOffer());
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription($pc2->createAnswer());
+        $pc1->setRemoteDescription($pc2->getLocalDescription());
+        $this->assertTrue($video->getSender()->isEnabled());
+        $pc1->close();
+        $pc2->close();
+    }
+
     public function testSetRemoteDescriptionNoCommonAudio()
     {
         $pc1 = RTCPeerConnectionHelper::createPeerConnection();
@@ -287,6 +354,34 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage("Failed to set remote video description send parameters");
         $pc2->setRemoteDescription($mangled);
+    }
+
+    public function testSetRemoteDescriptionAcceptsRejectedMediaWithoutTransportOrCodecs()
+    {
+        $pc1 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc2 = RTCPeerConnectionHelper::createPeerConnection();
+        $pc1->addTrack(new PreEncodedAudioStreamTrack());
+        $pc1->addTrack(new PreEncodedVideoStreamTrack());
+        $pc1->setLocalDescription($pc1->createOffer());
+        $pc2->setRemoteDescription($pc1->getLocalDescription());
+        $pc2->setLocalDescription($pc2->createAnswer());
+
+        [$audio, $video] = explode("m=video", $pc2->getLocalDescription()->getSdp(), 2);
+        $video = preg_replace('/^ [^ ]+/', ' 0', $video);
+        $video = preg_replace(
+            '/\r\na=(?:candidate|end-of-candidates|fingerprint|ice-pwd|ice-ufrag|rtcp|rtcp-mux|rtpmap|rtcp-fb|fmtp|ssrc|extmap):?[^\r\n]*/',
+            '',
+            (string) $video
+        );
+        $video = preg_replace('/\r\na=(?:sendrecv|sendonly|recvonly)/', '', (string) $video);
+        $answer = new RTCSessionDescription($audio."m=video".$video."\r\na=inactive\r\n", 'answer');
+
+        $pc1->setRemoteDescription($answer);
+
+        $this->assertSame(SDPDirections::inactive, $pc1->getTransceivers()[1]->getCurrentDirection());
+        $this->assertFalse($pc1->getTransceivers()[1]->getSender()->isEnabled());
+        $pc1->close();
+        $pc2->close();
     }
 
     public function testSetRemoteDescriptionMediaMismatch()

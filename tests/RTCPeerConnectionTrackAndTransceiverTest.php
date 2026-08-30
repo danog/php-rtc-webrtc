@@ -11,6 +11,7 @@ use Webrtc\ICE\Enum\CandidateType;
 use Webrtc\ICE\Enum\TransportType;
 use Webrtc\ICE\RTCIceCandidate;
 use Webrtc\RTP\Enum\MediaKind;
+use Webrtc\RTP\MediaStreamTrack\MediaStreamTrack;
 use Webrtc\SDP\Enum\SDPDirections;
 use Webrtc\Webrtc\Enum\SignalingState;
 use Webrtc\Webrtc\RTCConfiguration;
@@ -211,8 +212,12 @@ class RTCPeerConnectionTrackAndTransceiverTest extends TestCase
     {
         $pc = new RTCPeerConnection();
 
-        $wrongMediaTrack = $this->createStub(PreEncodedAudioStreamTrack::class);
-        $wrongMediaTrack->method('getKind')->willReturn(MediaKind::Unknown);
+        $wrongMediaTrack = new class extends MediaStreamTrack {
+            public function __construct()
+            {
+                parent::__construct(MediaKind::Unknown);
+            }
+        };
 
         // try adding an invalid track
         $this->expectException(InvalidArgumentException::class);

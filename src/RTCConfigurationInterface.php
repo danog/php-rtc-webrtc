@@ -11,9 +11,15 @@
 
 namespace Webrtc\Webrtc;
 
+use Webrtc\ICE\RTCICESetting;
+
 interface RTCConfigurationInterface
 {
     public function getIceServers(): array;
 
     public function getCertificatePath(): ?string;
+
+    public function getPrivateKeyPath(): ?string;
+
+    public function iceSettings(): RTCICESetting;
 }
