@@ -10,21 +10,20 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        php: ["8.2", "8.3", "8.4", "8.5"]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up PHP 8.4 with FFI
+      - name: Set up PHP ${{ matrix.php }}
         uses: shivammathur/setup-php@v2
         with:
-          php-version: 8.4
-          extensions: ffi
-          ini-values: ffi.enable=true
+          php-version: ${{ matrix.php }}
           tools: composer:v2
 
       - name: Validate composer.json and composer.lock
@@ -35,58 +34,12 @@ jobs:
         uses: actions/cache@v3
         with:
           path: vendor
-          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
           restore-keys: |
             ${{ runner.os }}-php-
 
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
-
-      - name: Install OpenSSL 3.x and srtp on Ubuntu
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo add-apt-repository -y ppa:ondrej/nginx
-          sudo apt update
-          sudo apt install -y libssl-dev openssl libsrtp2-dev
-          openssl version -v
-          pkg-config --modversion libsrtp2 || echo "libsrtp2 not found"
-
-      - name: Install FFmpeg 7.1.1 with libx264, libopus, libvpx 1.15.0
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf automake build-essential cmake git libtool pkg-config \
-            yasm nasm wget unzip libssl-dev \
-            libx264-dev libopus-dev
-
-          # Install FFmpeg 7.1.1
-          wget https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.bz2
-          tar xjf ffmpeg-7.1.1.tar.bz2
-          cd ffmpeg-7.1.1
-          ./configure --enable-shared --enable-gpl --enable-libx264 --enable-libopus
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-          cd ..
-          
-          # Build and install libvpx
-          mkdir -p ~/vpx_sources
-          cd ~/vpx_sources
-          curl -LO https://github.com/webmproject/libvpx/archive/refs/tags/v1.15.0.tar.gz
-          tar xzvf v1.15.0.tar.gz
-          cd libvpx-1.15.0
-
-          ./configure --prefix=/usr/local --enable-shared --disable-examples
-          make -j$(nproc)
-          sudo make install
-          sudo ldconfig
-
-          pkg-config --modversion vpx || echo "libvpx not found"
-
-      - name: Check PHP and FFI status
-        run: |
-          php -v
-          php -r "echo 'FFI enabled: ' . (extension_loaded('ffi') ? 'yes' : 'no') . PHP_EOL;"
 
       - name: Run Psalm
         run: vendor/bin/psalm --no-progress

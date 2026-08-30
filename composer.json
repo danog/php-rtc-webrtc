@@ -53,18 +53,15 @@
             "Tests\\Webrtc\\Webrtc\\": "tests"
         }
     },
+    "minimum-stability": "stable",
     "scripts": {
-        "pre-install-cmd": [
-            "@check-linux"
+        "post-install-cmd": [
+            "@composer bin all install --ansi"
         ],
-        "pre-update-cmd": [
-            "@check-linux"
-        ],
-        "check-linux": [
-            "php -r \"if (stripos(PHP_OS_FAMILY, 'Linux') === false) { fwrite(STDERR, 'This package only supports Linux.' . PHP_EOL); exit(1); }\""
+        "post-update-cmd": [
+            "@composer bin all update --ansi"
         ]
     },
-    "minimum-stability": "stable",
     "config": {
         "allow-plugins": {
             "bamarni/composer-bin-plugin": true

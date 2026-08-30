@@ -40,6 +40,7 @@ use Webrtc\ICE\Enum\IceTransportState;
 use Webrtc\ICE\RTCIceCandidate;
 use Webrtc\ICE\RTCIceGatherer;
 use Webrtc\ICE\RTCIceParameters;
+use Webrtc\ICE\RTCIceServer;
 use Webrtc\ICE\RTCIceTransport;
 use Webrtc\ICE\RTCIceTransportInterface;
 use Webrtc\NTP\NetworkTimeProtocol;
@@ -56,6 +57,7 @@ use Webrtc\RTPParameter\RTCRtcpFeedback;
 use Webrtc\RTPParameter\RTCRtpCodecCapability;
 use Webrtc\RTPParameter\RTCRtpCodecParameters;
 use Webrtc\RTPParameter\RTCRtpDecodingParameters;
+use Webrtc\RTPParameter\RTCRtpEncodingParameters;
 use Webrtc\RTPParameter\RTCRtpHeaderExtensionParameters;
 use Webrtc\RTPParameter\RTCRtpParameters;
 use Webrtc\RTPParameter\RTCRtpReceiveParameters;
@@ -479,7 +481,9 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         foreach ($this->transceivers as $transceiver) {
             if ($transceiver->getKind() === $track->getKind() && !$transceiver->getSender()->getTrack()) {
                 $transceiver->getSender()->replaceTrack($track);
-                $transceiver->setDirection(SDPDirections::from($transceiver->getDirection()->value | SDPDirections::sendonly->value));
+                $direction = $transceiver->getDirection();
+                assert($direction !== null);
+                $transceiver->setDirection(SDPDirections::from($direction->value | SDPDirections::sendonly->value));
                 return $transceiver->getSender();
             }
         }
@@ -630,7 +634,18 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
      */
     private function createMediaDescriptionForTransceiver(RTCRtpTransceiver $transceiver, ?string $mid = null): MediaDescription
     {
-        $mediaDescription = new MediaDescription($transceiver->getKind()->value, self::DISCARD_PORT, "UDP/TLS/RTP/SAVPF", array_map(fn($codec) => $codec->payloadType, $transceiver->getCodecs()));
+        $payloadTypes = [];
+        foreach ($transceiver->getCodecs() as $codec) {
+            assert($codec->payloadType !== null);
+            $payloadTypes[] = $codec->payloadType;
+        }
+
+        $mediaDescription = new MediaDescription(
+            $transceiver->getKind()->value,
+            self::DISCARD_PORT,
+            "UDP/TLS/RTP/SAVPF",
+            $payloadTypes
+        );
         $mediaDescription->setDirection($this->combinedDirection($transceiver));
         $mediaDescription->setMsid("{$transceiver->getSender()->getStreamId()} {$transceiver->getSender()->getTrackId()}");
         $midValue = $mid;
@@ -733,7 +748,10 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
             $offerDirection = SDPDirections::sendrecv;
         }
 
-        return SDPDirections::from($transceiver->getDirection()->value & $offerDirection->value);
+        $currentDirection = $transceiver->getDirection();
+        assert($currentDirection !== null);
+
+        return SDPDirections::from($currentDirection->value & $offerDirection->value);
     }
 
     /**
@@ -832,7 +850,13 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         }
 
         // create ICE transport
-        $iceGatherer = new RTCIceGatherer($this->configuration->getIceServers(), $this->configuration->iceSettings(), $this->logger);
+        $iceServers = [];
+        foreach ($this->configuration->getIceServers() as $iceServer) {
+            assert($iceServer instanceof RTCIceServer);
+            $iceServers[] = $iceServer;
+        }
+
+        $iceGatherer = new RTCIceGatherer($iceServers, $this->configuration->iceSettings(), $this->logger);
         $iceGatherer->on("statechange", fn() => $this->updateIceGatheringState());
         $iceTransport = new RTCIceTransport($iceGatherer, $this->logger);
         $iceTransport->on("statechange", fn() => $this->updateIceConnectionState());
@@ -875,7 +899,11 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
             /** @var list<RTCRtpCodecCapability> $preferredCodecs */
             $preferredCodecs = $transceiver->getPreferredCodecs();
             $transceiver->setCodecs($this->findPreferredCodecs($codecs, $preferredCodecs));
-            $transceiver->setheaderExtensions($codec->getHeaderExtensions($transceiver->getKind()->value));
+            $headerExtensions = [];
+            foreach ($codec->getHeaderExtensions($transceiver->getKind()->value) as $extension) {
+                $headerExtensions[] = $extension;
+            }
+            $transceiver->setHeaderExtensions($headerExtensions);
         }
         $mids = $this->seenMids;
 
@@ -1450,6 +1478,19 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
             $masterTransport = $this->requireDtlsTransport($this->sctp->getDtlsTransport());
         }
 
+        // A remote peer may negotiate a mid it renamed itself (browsers replace the generated
+        // mid with one of their own), so the BUNDLE group's master mid can point at a string
+        // no transceiver carries anymore. The master transport is still the transport of the
+        // first media section, so fall back to it when the literal mid does not match.
+        if ($masterTransport === null) {
+            foreach ($this->transceivers as $transceiver) {
+                if ($transceiver->getMid() !== null) {
+                    $masterTransport = $this->requireDtlsTransport($transceiver->getDtlsTransport());
+                    break;
+                }
+            }
+        }
+
         if ($masterTransport === null) {
             throw new RuntimeException("Unable to determine the master transport for the BUNDLE group");
         }
@@ -1672,6 +1713,16 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         $rtp = new RTCRtpSendParameters($transceiver->getCodecs(), $headerExtensions, $transceiver->getMid() ?? '');
         $rtp->rtcp->cname = $this->cname;
         $rtp->rtcp->ssrc = $transceiver->getSender()->getSsrc();
+
+        $payloadType = null;
+        foreach ($transceiver->getCodecs() as $codec) {
+            if ($codec->payloadType !== null) {
+                $payloadType = $codec->payloadType;
+                break;
+            }
+        }
+        assert($payloadType !== null);
+        $rtp->encodings = [new RTCRtpEncodingParameters($transceiver->getSender()->getSsrc(), $payloadType)];
 
         return $rtp;
     }
@@ -2101,11 +2152,13 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
      */
     private function packetization(RTCRtpCodecParameters $codec): string
     {
-        $mode = $codec->parameters['packetization-mode'];
-        if ($mode === null) {
-            return '0';
+        if (array_key_exists('packetization-mode', $codec->parameters)) {
+            $mode = $codec->parameters['packetization-mode'];
+            if ($mode !== null) {
+                return (string)$mode;
+            }
         }
-        return (string)$mode;
+        return '0';
     }
 
     /**
