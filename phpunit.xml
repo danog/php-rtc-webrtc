@@ -34,11 +34,6 @@
         </include>
     </source>
 
-    <coverage>
-        <report>
-            <text outputFile=".phpunit.cache/coverage.txt" showOnlySummary="true"/>
-        </report>
-    </coverage>
 
     <php>
         <ini name="display_errors" value="true"/>
