@@ -1515,13 +1515,6 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 
     public function testConnectAudioAndVideo()
     {
-        // Shared GitHub Actions macOS runners do not reliably complete ICE for bundled
-        // audio+video within the assertion timeout (state goes to failed). The behavior
-        // is exercised on the Linux and Windows matrix legs.
-        if (PHP_OS_FAMILY === 'Darwin') {
-            $this->markTestSkipped('Bundled audio+video ICE is unreliable on macOS CI runners.');
-        }
-
         $pc1States = [];
         $pc2States = [];
 
@@ -1811,7 +1804,9 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertStringContainsString("m=video ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
 
-        $this->waitUntil(fn() => $pc2->getIceConnectionState() === IceConnectionState::failed);
+        // Connectivity checks retransmit, so a failed negotiation takes longer
+        // than a single 500ms STUN try.
+        $this->waitUntil(fn() => $pc2->getIceConnectionState() === IceConnectionState::failed, 30.0);
 
         // check the outcome
         $this->assertEquals(IceConnectionState::closed, $pc1->getIceConnectionState());
@@ -1869,11 +1864,6 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
 
     public function testConnectAudioThenVideo()
     {
-        // Same macOS CI limitation as testConnectAudioAndVideo (see above).
-        if (PHP_OS_FAMILY === 'Darwin') {
-            $this->markTestSkipped('Bundled audio+video ICE is unreliable on macOS CI runners.');
-        }
-
         $pc1States = [];
         $pc2States = [];
 

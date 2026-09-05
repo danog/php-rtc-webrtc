@@ -45,21 +45,49 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress
 
+      - name: Configure Linux network (multicast, IPv6, rp_filter)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo ip link set lo multicast on
+          sudo ip route replace 224.0.0.0/4 dev lo || true
+          sudo sysctl -w net.ipv4.conf.all.rp_filter=0
+          sudo sysctl -w net.ipv4.conf.default.rp_filter=0
+          sudo sysctl -w net.ipv4.conf.lo.rp_filter=0
+          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0
+          sudo ip -6 addr add fd00:1:2:3::1/128 dev lo || true
+
+      - name: Configure macOS network (multicast, IPv6, firewall)
+        if: matrix.os == 'macos-latest'
+        run: |
+          sudo ifconfig lo0 multicast || true
+          sudo route -n add -net 224.0.0.0/4 -interface lo0 || true
+          sudo ifconfig lo0 inet6 fd00:1:2:3::1/128 alias || true
+          sudo /usr/libexec/ApplicationFirewall/socketfilterfw --setglobalstate off || true
+
+      - name: Configure Windows network (firewall, weak host, IPv6)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
+          Get-NetIPInterface | ForEach-Object {
+            Set-NetIPInterface -InterfaceIndex $_.InterfaceIndex `
+              -WeakHostSend Enabled -WeakHostReceive Enabled -ErrorAction SilentlyContinue
+          }
+          netsh interface ipv6 add address "Loopback Pseudo-Interface 1" fd00:1:2:3::1
+
       - name: Run Psalm
         run: vendor/bin/psalm --no-progress
 
       - name: Cache FFmpeg 9.0.1 build
         id: ffmpeg-cache
-        if: matrix.os == 'ubuntu-latest'
         uses: actions/cache@v4
         with:
           path: ${{ runner.tool_cache }}/ffmpeg-9.0.1
-          key: ffmpeg-9.0.1-ubuntu
+          key: ffmpeg-9.0.1-${{ runner.os }}-${{ runner.arch }}
 
-      - name: Install FFmpeg runtime libraries
+      - name: Install FFmpeg runtime libraries (Ubuntu)
         # The cached FFmpeg prefix is linked against these Ubuntu packages.
-        # Skipping apt on a cache hit left libavcodec unable to load, so the
-        # PCMA/PCMU test skipped and Linux PHPUnit (failOnSkipped) failed.
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
@@ -68,19 +96,14 @@ jobs:
             libmp3lame-dev libopus-dev zlib1g-dev
 
       - name: Install FFmpeg 9.0.1 on Linux
-        # The media-flow tests bind against the FFmpeg 9 headers bundled in the
-        # AVCodec package, so the loaded libraries must be FFmpeg 9 too. Ubuntu's
-        # packaged FFmpeg is older, so build 9.0.1 from source into a cached prefix.
-        # Windows/macOS have no matching build, so those tests skip (skip-tolerant).
         if: matrix.os == 'ubuntu-latest' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get install -y \
             autoconf automake build-essential cmake git libtool \
             pkg-config texinfo nasm
 
-          git clone https://github.com/FFmpeg/FFmpeg.git
+          git clone --depth 1 --branch n9.0.1 https://github.com/FFmpeg/FFmpeg.git
           cd FFmpeg
-          git checkout n9.0.1
           ./configure --prefix="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1" \
             --enable-shared --enable-gpl --enable-nonfree \
             --enable-libx264 --enable-libx265 --enable-libvpx \
@@ -88,26 +111,87 @@ jobs:
           make -j$(nproc)
           make install
 
-      - name: Verify FFmpeg 9 libraries
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install FFmpeg 9.0.1 on macOS
+        if: matrix.os == 'macos-latest' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: |
-          FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
-          ls -l "$FFMPEG_PREFIX/lib"/libavcodec.so* "$FFMPEG_PREFIX/lib"/libavformat.so* "$FFMPEG_PREFIX/lib"/libavfilter.so*
-          test -e "$FFMPEG_PREFIX/lib/libavcodec.so"
-          LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:$LD_LIBRARY_PATH" ldd "$FFMPEG_PREFIX/lib/libavcodec.so"
+          brew install nasm pkg-config x264 x265 libvpx fdk-aac lame opus
+          git clone --depth 1 --branch n9.0.1 https://github.com/FFmpeg/FFmpeg.git
+          cd FFmpeg
+          export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          ./configure --prefix="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1" \
+            --enable-shared --enable-gpl --enable-nonfree \
+            --enable-libx264 --enable-libx265 --enable-libvpx \
+            --enable-libfdk-aac --enable-libmp3lame --enable-libopus
+          make -j$(sysctl -n hw.logicalcpu)
+          make install
+
+      - name: Install Homebrew FFmpeg runtime deps on macOS
+        # Cached dylibs still need the Homebrew codec libs they were linked against.
+        if: matrix.os == 'macos-latest'
+        run: brew install x264 x265 libvpx fdk-aac lame opus
+
+      - name: Install FFmpeg 9 shared libraries on Windows
+        if: matrix.os == 'windows-latest' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = "$env:RUNNER_TOOL_CACHE\ffmpeg-9.0.1"
+          New-Item -ItemType Directory -Force -Path $prefix | Out-Null
+          $zip = "$env:RUNNER_TEMP\ffmpeg-win64-shared.zip"
+          # BtbN n9.0 shared GPL build. The -latest alias tracks the 9.0 release branch.
+          $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-gpl-shared-9.0.zip'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg-extract" -Force
+          $root = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg-extract" -Directory | Select-Object -First 1
+          Copy-Item -Path "$($root.FullName)\*" -Destination $prefix -Recurse -Force
+
+      - name: Verify FFmpeg 9 libraries
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Linux)
+              FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
+              ls -l "$FFMPEG_PREFIX/lib"/libavcodec.so* "$FFMPEG_PREFIX/lib"/libavformat.so* "$FFMPEG_PREFIX/lib"/libavfilter.so*
+              test -e "$FFMPEG_PREFIX/lib/libavcodec.so"
+              LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:${LD_LIBRARY_PATH:-}" ldd "$FFMPEG_PREFIX/lib/libavcodec.so"
+              ;;
+            macOS)
+              FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
+              ls -l "$FFMPEG_PREFIX/lib"/libavcodec*.dylib "$FFMPEG_PREFIX/lib"/libavformat*.dylib "$FFMPEG_PREFIX/lib"/libavfilter*.dylib
+              test -e "$FFMPEG_PREFIX/lib/libavcodec.dylib"
+              ;;
+            Windows)
+              FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
+              ls -l "$FFMPEG_PREFIX/bin"/avcodec-*.dll "$FFMPEG_PREFIX/bin"/avformat-*.dll "$FFMPEG_PREFIX/bin"/avfilter-*.dll
+              ;;
+          esac
 
       - name: Run PHPUnit tests
-        run: |
-          if [ "$RUNNER_OS" = "Linux" ]; then
-            # Point the AVCodec bindings at the cached FFmpeg 9 build, since the
-            # system /usr/lib FFmpeg 6 would otherwise be picked up first.
-            FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
-            export LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:$LD_LIBRARY_PATH"
-            export LIB_AVCODEC_PATH="$FFMPEG_PREFIX/lib/libavcodec.so"
-            export LIB_AVFORMAT_PATH="$FFMPEG_PREFIX/lib/libavformat.so"
-            export LIB_AVFILTER_PATH="$FFMPEG_PREFIX/lib/libavfilter.so"
-            vendor/bin/phpunit
-          else
-            vendor/bin/phpunit -c phpunit-skiptolerant.xml
-          fi
         shell: bash
+        run: |
+          FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
+          case "$RUNNER_OS" in
+            Linux)
+              export LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+              export LIB_AVCODEC_PATH="$FFMPEG_PREFIX/lib/libavcodec.so"
+              export LIB_AVFORMAT_PATH="$FFMPEG_PREFIX/lib/libavformat.so"
+              export LIB_AVFILTER_PATH="$FFMPEG_PREFIX/lib/libavfilter.so"
+              ;;
+            macOS)
+              export DYLD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
+              export LIB_AVCODEC_PATH="$FFMPEG_PREFIX/lib/libavcodec.dylib"
+              export LIB_AVFORMAT_PATH="$FFMPEG_PREFIX/lib/libavformat.dylib"
+              export LIB_AVFILTER_PATH="$FFMPEG_PREFIX/lib/libavfilter.dylib"
+              ;;
+            Windows)
+              FFMPEG_PREFIX_WIN="$(cygpath -u "$FFMPEG_PREFIX" 2>/dev/null || echo "$FFMPEG_PREFIX")"
+              export PATH="$FFMPEG_PREFIX/bin:$PATH"
+              codec_dll="$(ls "$FFMPEG_PREFIX/bin"/avcodec-*.dll | head -1)"
+              format_dll="$(ls "$FFMPEG_PREFIX/bin"/avformat-*.dll | head -1)"
+              filter_dll="$(ls "$FFMPEG_PREFIX/bin"/avfilter-*.dll | head -1)"
+              export LIB_AVCODEC_PATH="$codec_dll"
+              export LIB_AVFORMAT_PATH="$format_dll"
+              export LIB_AVFILTER_PATH="$filter_dll"
+              ;;
+          esac
+          vendor/bin/phpunit
