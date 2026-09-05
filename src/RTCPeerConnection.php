@@ -83,6 +83,7 @@ use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
 use Webrtc\Mixin\EventReemitter;
+use Webrtc\Mixin\SerializableState;
 
 /**
  * RTCPeerConnection represents a WebRTC connection between the local device and a remote peer.
@@ -1542,7 +1543,14 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
             return;
         }
         $this->connecting = true;
-        EventLoop::queue(function (): void {
+        EventLoop::queue($this->runScheduledConnect(...));
+    }
+
+    /**
+     * Drive ICE/DTLS connect off the current fiber. Public so unserialize can re-queue it.
+     */
+    public function runScheduledConnect(): void
+    {
             try {
                 do {
                     $this->connectPending = false;
@@ -1555,7 +1563,6 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
             }
             $this->updateIceConnectionState();
             $this->updateConnectionState();
-        });
     }
 
     /**
@@ -2206,5 +2213,25 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     public function setSctpLegacySdp(bool $sctpLegacySdp): void
     {
         $this->sctpLegacySdp = $sctpLegacySdp;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function __serialize(): array
+    {
+        return SerializableState::export($this);
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public function __unserialize(array $data): void
+    {
+        SerializableState::import($this, $data);
+        if ($this->connecting) {
+            $this->connecting = false;
+            $this->scheduleConnect();
+        }
     }
 }
