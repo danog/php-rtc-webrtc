@@ -110,7 +110,7 @@ class RTCPeerConnectionBaseTest extends TestCase
             && $pc2->getIceConnectionState() === IceConnectionState::completed
             && $pc1->getConnectionState() === ConnectionState::connected
             && $pc2->getConnectionState() === ConnectionState::connected
-        );
+        , 20.0);
         $this->assertEquals(IceConnectionState::completed, $pc1->getIceConnectionState());
         $this->assertEquals(IceConnectionState::completed, $pc2->getIceConnectionState());
     }

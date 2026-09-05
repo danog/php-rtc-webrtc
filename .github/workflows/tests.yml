@@ -56,6 +56,17 @@ jobs:
           path: ${{ runner.tool_cache }}/ffmpeg-9.0.1
           key: ffmpeg-9.0.1-ubuntu
 
+      - name: Install FFmpeg runtime libraries
+        # The cached FFmpeg prefix is linked against these Ubuntu packages.
+        # Skipping apt on a cache hit left libavcodec unable to load, so the
+        # PCMA/PCMU test skipped and Linux PHPUnit (failOnSkipped) failed.
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx264-dev libx265-dev libvpx-dev libfdk-aac-dev \
+            libmp3lame-dev libopus-dev zlib1g-dev
+
       - name: Install FFmpeg 9.0.1 on Linux
         # The media-flow tests bind against the FFmpeg 9 headers bundled in the
         # AVCodec package, so the loaded libraries must be FFmpeg 9 too. Ubuntu's
@@ -63,12 +74,9 @@ jobs:
         # Windows/macOS have no matching build, so those tests skip (skip-tolerant).
         if: matrix.os == 'ubuntu-latest' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt update
-          sudo apt install -y \
+          sudo apt-get install -y \
             autoconf automake build-essential cmake git libtool \
-            pkg-config texinfo zlib1g-dev libx264-dev libx265-dev \
-            libvpx-dev libfdk-aac-dev libmp3lame-dev libopus-dev \
-            nasm
+            pkg-config texinfo nasm
 
           git clone https://github.com/FFmpeg/FFmpeg.git
           cd FFmpeg
@@ -79,6 +87,14 @@ jobs:
             --enable-libfdk-aac --enable-libmp3lame --enable-libopus
           make -j$(nproc)
           make install
+
+      - name: Verify FFmpeg 9 libraries
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
+          ls -l "$FFMPEG_PREFIX/lib"/libavcodec.so* "$FFMPEG_PREFIX/lib"/libavformat.so* "$FFMPEG_PREFIX/lib"/libavfilter.so*
+          test -e "$FFMPEG_PREFIX/lib/libavcodec.so"
+          LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:$LD_LIBRARY_PATH" ldd "$FFMPEG_PREFIX/lib/libavcodec.so"
 
       - name: Run PHPUnit tests
         run: |
