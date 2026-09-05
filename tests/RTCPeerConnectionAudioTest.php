@@ -1811,7 +1811,9 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertStringContainsString("m=video ", $pc2->getLocalDescription()->getSdp());
         $this->assertStringContainsString("m=application ", $pc2->getLocalDescription()->getSdp());
 
-        $this->waitUntil(fn() => $pc2->getIceConnectionState() === IceConnectionState::failed);
+        // Connectivity checks retransmit, so a failed negotiation takes longer
+        // than a single 500ms STUN try.
+        $this->waitUntil(fn() => $pc2->getIceConnectionState() === IceConnectionState::failed, 30.0);
 
         // check the outcome
         $this->assertEquals(IceConnectionState::closed, $pc1->getIceConnectionState());
