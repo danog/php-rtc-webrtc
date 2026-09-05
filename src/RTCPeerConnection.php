@@ -82,6 +82,7 @@ use Webrtc\Stats\RTCStatsReport;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
+use Webrtc\Mixin\EventReemitter;
 
 /**
  * RTCPeerConnection represents a WebRTC connection between the local device and a remote peer.
@@ -831,9 +832,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         $this->sctp = new RTCSctpTransport($this->createDtlsTransport());
         $this->sctp->setLogger($this->logger);
 
-        $this->sctp->on("datachannel", function (RTCDataChannel $dataChannel): void {
-            $this->emit("datachannel", [$dataChannel]);
-        });
+        $this->sctp->on("datachannel", new EventReemitter($this, "datachannel"));
     }
 
     /**
@@ -857,16 +856,16 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         }
 
         $iceGatherer = new RTCIceGatherer($iceServers, $this->configuration->iceSettings(), $this->logger);
-        $iceGatherer->on("statechange", fn() => $this->updateIceGatheringState());
+        $iceGatherer->on("statechange", [$this, 'updateIceGatheringState']);
         $iceTransport = new RTCIceTransport($iceGatherer, $this->logger);
-        $iceTransport->on("statechange", fn() => $this->updateIceConnectionState());
-        $iceTransport->on("statechange", fn() => $this->updateConnectionState());
+        $iceTransport->on("statechange", [$this, 'updateIceConnectionState']);
+        $iceTransport->on("statechange", [$this, 'updateConnectionState']);
         $this->iceTransports[spl_object_id($iceTransport)] = $iceTransport;
 
         // create DTLS transport
         $dtlsTransport = new RTCDtlsTransport($iceTransport, $this->certificates[0]);
         $dtlsTransport->setLogger($this->logger);
-        $dtlsTransport->on("statechange", fn() => $this->updateConnectionState());
+        $dtlsTransport->on("statechange", [$this, 'updateConnectionState']);
         $this->dtlsTransports[spl_object_id($dtlsTransport)] = $dtlsTransport;
 
         //update states
@@ -1784,7 +1783,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     /**
      * Updates the connection state based on transport states.
      */
-    private function updateConnectionState(): void
+    public function updateConnectionState(): void
     {
         $dtlsStates = [];
         foreach ($this->dtlsTransports as $transport) {
@@ -1824,7 +1823,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     /**
      * Updates the ICE connection state based on transport states.
      */
-    private function updateIceConnectionState(): void
+    public function updateIceConnectionState(): void
     {
         $iceStates = array_values(array_map(fn(RTCIceTransport $transport) => $transport->getState(), $this->iceTransports));
 
@@ -1854,7 +1853,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
      *
      * Emits "icegatheringstatechange" if the state changes.
      */
-    private function updateIceGatheringState(): void
+    public function updateIceGatheringState(): void
     {
         // Compute new state
         $states = [];
