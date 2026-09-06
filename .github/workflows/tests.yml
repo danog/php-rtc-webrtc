@@ -117,9 +117,17 @@ jobs:
           brew install nasm pkg-config x264 x265 libvpx fdk-aac lame opus
           git clone --depth 1 --branch n9.0.1 https://github.com/FFmpeg/FFmpeg.git
           cd FFmpeg
-          export PKG_CONFIG_PATH="$(brew --prefix)/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          BREW_PREFIX="$(brew --prefix)"
+          export PKG_CONFIG_PATH="$BREW_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+          # lame (libmp3lame) ships no pkg-config .pc file, so FFmpeg's configure probes it
+          # with the bare compiler. On macOS the Homebrew prefix is not a default search path,
+          # so lame/lame.h and -lmp3lame are invisible without these flags and configure fails
+          # with "ERROR: libmp3lame >= 3.98.3 not found". The .pc-shipping codecs are already
+          # found via PKG_CONFIG_PATH above.
           ./configure --prefix="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1" \
             --enable-shared --enable-gpl --enable-nonfree \
+            --extra-cflags="-I$BREW_PREFIX/include" \
+            --extra-ldflags="-L$BREW_PREFIX/lib" \
             --enable-libx264 --enable-libx265 --enable-libvpx \
             --enable-libfdk-aac --enable-libmp3lame --enable-libopus
           make -j$(sysctl -n hw.logicalcpu)
@@ -165,6 +173,42 @@ jobs:
               ls -l "$FFMPEG_PREFIX/bin"/avcodec-*.dll "$FFMPEG_PREFIX/bin"/avformat-*.dll "$FFMPEG_PREFIX/bin"/avfilter-*.dll
               ;;
           esac
+
+      - name: Diagnose AVCodec FFI availability
+        shell: bash
+        run: |
+          FFMPEG_PREFIX="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1"
+          case "$RUNNER_OS" in
+            Linux)
+              export LD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:${LD_LIBRARY_PATH:-}"
+              export LIB_AVCODEC_PATH="$FFMPEG_PREFIX/lib/libavcodec.so"
+              export LIB_AVFORMAT_PATH="$FFMPEG_PREFIX/lib/libavformat.so"
+              export LIB_AVFILTER_PATH="$FFMPEG_PREFIX/lib/libavfilter.so"
+              ;;
+            macOS)
+              export DYLD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
+              export LIB_AVCODEC_PATH="$FFMPEG_PREFIX/lib/libavcodec.dylib"
+              export LIB_AVFORMAT_PATH="$FFMPEG_PREFIX/lib/libavformat.dylib"
+              export LIB_AVFILTER_PATH="$FFMPEG_PREFIX/lib/libavfilter.dylib"
+              ;;
+            Windows)
+              export PATH="$FFMPEG_PREFIX/bin:$PATH"
+              export LIB_AVCODEC_PATH="$(ls "$FFMPEG_PREFIX/bin"/avcodec-*.dll | head -1)"
+              export LIB_AVFORMAT_PATH="$(ls "$FFMPEG_PREFIX/bin"/avformat-*.dll | head -1)"
+              export LIB_AVFILTER_PATH="$(ls "$FFMPEG_PREFIX/bin"/avfilter-*.dll | head -1)"
+              ;;
+          esac
+          echo "LIB_AVCODEC_PATH=$LIB_AVCODEC_PATH"
+          php -r '
+            require "vendor/autoload.php";
+            echo "FFI loaded: " . (extension_loaded("FFI") ? "yes" : "no") . "\n";
+            foreach (["AVCodec", "AVFormat", "AVFilter"] as $c) {
+              $fqcn = "Webrtc\\AVCodec\\$c";
+              try { $fqcn::init(); echo "$c: OK\n"; }
+              catch (\Throwable $e) { echo "$c: " . get_class($e) . ": " . $e->getMessage() . "\n"; }
+            }
+            echo "isAvailable: " . (\Webrtc\AVCodec\AVCodec::isAvailable() ? "true" : "false") . "\n";
+          ' || true
 
       - name: Run PHPUnit tests
         shell: bash
