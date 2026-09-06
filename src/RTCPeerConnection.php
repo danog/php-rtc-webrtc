@@ -64,6 +64,7 @@ use Webrtc\RTPParameter\RTCRtpReceiveParameters;
 use Webrtc\RTPParameter\RTCRtpRtxParameters;
 use Webrtc\RTPParameter\RTCRtpSendParameters;
 use Webrtc\SCTP\Exception\SctpException;
+use Webrtc\SCTP\Listener\DataChannelListener;
 use Webrtc\SCTP\RTCSctpDtlsTransportInterface;
 use Webrtc\SCTP\RTCSctpTransport;
 use Webrtc\SDP\DtlsParameter\RTCDtlsParameters;
@@ -82,7 +83,6 @@ use Webrtc\Stats\RTCStatsReport;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
-use Webrtc\Mixin\EventReemitter;
 use Webrtc\Mixin\SerializableState;
 
 /**
@@ -106,7 +106,7 @@ use Webrtc\Mixin\SerializableState;
  * - "track": Fired when a new media track is received
  * - "datachannel": Fired when a new data channel is created by the remote peer
  */
-final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterface
+final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterface, DataChannelListener
 {
     /**
      * Port number used for discard protocol (used as placeholder in SDP)
@@ -833,7 +833,17 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         $this->sctp = new RTCSctpTransport($this->createDtlsTransport());
         $this->sctp->setLogger($this->logger);
 
-        $this->sctp->on("datachannel", new EventReemitter($this, "datachannel"));
+        $this->sctp->addDataChannelListener($this);
+    }
+
+    /**
+     * Re-emit a remotely-opened data channel to application listeners (was the re-emitted
+     * 'datachannel' event). Typed replacement registered via addDataChannelListener().
+     */
+    #[\Override]
+    public function onDataChannel(RTCDataChannel $channel): void
+    {
+        $this->emit('datachannel', [$channel]);
     }
 
     /**
