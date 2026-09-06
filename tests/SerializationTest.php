@@ -29,22 +29,15 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
 {
     public function testConnectedDataChannelResumesAfterSerializeCycle(): void
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            // A resumed peer keeps the session alive by continuing ICE binding checks over the
-            // rebound UDP socket. Windows' SIO_UDP_CONNRESET tears a UDP socket down on the first
-            // datagram to a momentarily-unreachable peer, so a connection re-established after the
-            // cycle is unreliable there — the same limitation that keeps the ICE Windows suite red
-            // and cannot be worked around from PHP. Linux and macOS run this in full.
-            self::markTestSkipped('Resumed UDP connections are unreliable on Windows (SIO_UDP_CONNRESET).');
-        }
-
         // pc1 is the peer that gets serialized: build it raw so no test closure lands in its graph.
         $pc1 = new RTCPeerConnection();
         $pc2 = new RTCPeerConnection();
 
-        // pc2 records what it receives on the data channel.
+        // pc2 records what it receives on the data channel and keeps a handle to reply later.
         $pc2Received = [];
-        $pc2->on('datachannel', function (RTCDataChannel $channel) use (&$pc2Received): void {
+        $pc2Channel = null;
+        $pc2->on('datachannel', function (RTCDataChannel $channel) use (&$pc2Received, &$pc2Channel): void {
+            $pc2Channel = $channel;
             $channel->on('message', function ($message) use (&$pc2Received): void {
                 $pc2Received[] = $message;
             });
@@ -70,28 +63,22 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
         delay(0.2);
 
         // serialize => destroy (unset + gc, no close) => unserialize on pc1 while pc2 stays live.
+        // Weakly track the nominated UDP protocols before dropping the peer: reclaiming the peer is
+        // not instantaneous (see reclaimPeer()), and the restored peer must not rebind a port until
+        // its previous socket is truly gone.
         $blob = serialize($pc1);
         $weak = WeakReference::create($pc1);
+        $protocols = $this->nominatedProtocols($pc1);
         unset($pc1, $dc);
-        while (gc_collect_cycles()) {
-        }
+
+        $this->reclaimPeer($protocols);
 
         $this->assertNull($weak->get(), 'the connected peer was pinned and not garbage-collected after unset');
-
-        // Disable the cycle collector across unserialize(). The internal event listeners are held
-        // in WeakMaps, and while the object graph is being rebuilt a listener is momentarily
-        // reachable only through an as-yet-unanchored reference cycle; an automatic collection in
-        // that window would drop it, silently breaking the resumed peer's inbound path. The graph
-        // is fully strongly-anchored again by the time unserialize() returns.
-        $gcWasEnabled = gc_enabled();
-        gc_disable();
-        try {
-            $restored = unserialize($blob);
-        } finally {
-            if ($gcWasEnabled) {
-                gc_enable();
-            }
+        foreach ($protocols as $protocol) {
+            $this->assertNull($protocol->get(), 'a nominated UDP socket was pinned and not released after unset');
         }
+
+        $restored = unserialize($blob);
         $this->assertInstanceOf(RTCPeerConnection::class, $restored);
 
         // The restored peer still holds an open data channel; the app re-attaches its handler.
@@ -102,17 +89,94 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
         $this->assertCount(1, $channels);
         $restoredDc = array_values($channels)[0];
         $this->assertInstanceOf(RTCDataChannel::class, $restoredDc);
+        $restoredReceived = [];
+        $restoredDc->on('message', function ($message) use (&$restoredReceived): void {
+            $restoredReceived[] = $message;
+        });
         $this->assertDataChannelOpen($restoredDc);
+        $this->assertNotNull($pc2Channel);
 
-        // Activity resumes over the rebound sockets: the restored peer sends application data on
-        // the resumed data channel and the untouched live peer receives it. This exercises the
-        // whole restored stack end to end — the rebound UDP sockets, the resumed DTLS session, and
-        // the SCTP association carrying the message on the same channel it had before the cycle.
+        // Activity resumes over the rebound sockets in both directions: the restored peer sends
+        // application data on the resumed data channel and the untouched live peer receives it...
         $restoredDc->send('after');
         $this->waitUntil(fn () => $pc2Received === ['before', 'after'], 15.0);
         $this->assertSame(['before', 'after'], $pc2Received);
 
+        // ...and the live peer sends back, which the restored peer receives on the same channel.
+        $pc2Channel->send('reply');
+        $this->waitUntil(fn () => $restoredReceived === ['reply'], 15.0);
+        $this->assertSame(['reply'], $restoredReceived);
+
         $restored->close();
         $pc2->close();
+    }
+
+    /**
+     * Fully reclaim a just-unset peer, releasing every UDP socket it held, before it is restored.
+     *
+     * A live ICE connection runs consent-freshness checks (RFC 7675): onConsentTimer() fires a
+     * detached async() fiber that suspends inside a STUN request(). A suspended fiber keeps its
+     * whole call stack — the candidate pair, its protocol and the bound UDP socket — reachable
+     * however weakly the closure captured them, so the cycle collector cannot reclaim that socket
+     * while a check is in flight. Left alone the socket would linger and be re-bound (SO_REUSEPORT)
+     * by the restored peer, and the kernel could then route the far peer's datagrams to the dead
+     * socket. A real process exit tears those fibers down; here we do the equivalent.
+     *
+     * The order matters. First collect, which frees the peer (its consent repeat-timer holds only a
+     * weak reference, so it self-cancels on its next tick and starts no new checks). Then run the
+     * loop so any check still in flight receives its STUN response and returns, dropping the last
+     * reference to its socket; the socket's __destruct fclose()s the port synchronously. A missed
+     * response waits a retransmit, so this alternates draining and collecting until every tracked
+     * protocol is gone rather than draining for a fixed guess — bounded so a genuinely stuck fiber
+     * fails the assertion below instead of hanging.
+     *
+     * @param list<WeakReference<object>> $protocols
+     */
+    private function reclaimPeer(array $protocols): void
+    {
+        $deadline = microtime(true) + 5.0;
+        do {
+            while (gc_collect_cycles()) {
+            }
+            $pinned = false;
+            foreach ($protocols as $protocol) {
+                if ($protocol->get() !== null) {
+                    $pinned = true;
+                    break;
+                }
+            }
+            if (!$pinned) {
+                return;
+            }
+            // Let the loop actually service the sockets: a bare queue()+await only runs
+            // already-ready callbacks, so the STUN response the parked fiber awaits may not have
+            // arrived. Timed delays block on I/O, the far peer answers, the fiber unwinds.
+            for ($i = 0; $i < 5; $i++) {
+                delay(0.05);
+            }
+        } while (microtime(true) < $deadline);
+    }
+
+    /**
+     * Weakly reference the UDP protocol object behind each nominated candidate pair.
+     *
+     * These are the objects whose sockets hold the bound ports; tracking them weakly lets
+     * reclaimPeer() wait for the ports to be released without keeping them alive itself.
+     *
+     * @return list<WeakReference<object>>
+     */
+    private function nominatedProtocols(RTCPeerConnection $pc): array
+    {
+        $protocols = [];
+        $transports = (new ReflectionProperty($pc, 'iceTransports'))->getValue($pc);
+        foreach ((array) $transports as $transport) {
+            $connection = $transport->getIceConnection();
+            $nominated = (new ReflectionProperty($connection, 'nominated'))->getValue($connection);
+            foreach ((array) $nominated as $pair) {
+                $protocols[] = WeakReference::create($pair->getProtocol());
+            }
+        }
+
+        return $protocols;
     }
 }
