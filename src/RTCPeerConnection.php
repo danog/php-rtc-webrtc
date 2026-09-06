@@ -1547,9 +1547,13 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     }
 
     /**
-     * Drive ICE/DTLS connect off the current fiber. Public so unserialize can re-queue it.
+     * Drive ICE/DTLS connect off the current fiber.
+     *
+     * Queued only as the first-class callable `$this->runScheduledConnect(...)` handed to
+     * EventLoop::queue(), including when unserialize re-queues it. That callable captures this
+     * method's private scope, so the event loop can run it while it stays private.
      */
-    public function runScheduledConnect(): void
+    private function runScheduledConnect(): void
     {
             try {
                 do {
@@ -1789,6 +1793,11 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
 
     /**
      * Updates the connection state based on transport states.
+     *
+     * @internal Public only because it is registered as the serializable listener
+     * `[$this, 'updateConnectionState']` on the ICE and DTLS transports' emitters — an array
+     * callable Evenement invokes from outside this class, and one that (unlike a Closure) survives
+     * serialization so the wiring is restored automatically. Not part of the public API.
      */
     public function updateConnectionState(): void
     {
@@ -1829,6 +1838,11 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
 
     /**
      * Updates the ICE connection state based on transport states.
+     *
+     * @internal Public only because it is registered as the serializable listener
+     * `[$this, 'updateIceConnectionState']` on the ICE transport's emitter — an array callable
+     * Evenement invokes from outside this class, and one that (unlike a Closure) survives
+     * serialization so the wiring is restored automatically. Not part of the public API.
      */
     public function updateIceConnectionState(): void
     {
@@ -1859,6 +1873,11 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
      * Updates the ICE gathering state based on the state of all ICE transports.
      *
      * Emits "icegatheringstatechange" if the state changes.
+     *
+     * @internal Public only because it is registered as the serializable listener
+     * `[$this, 'updateIceGatheringState']` on each ICE gatherer's emitter — an array callable
+     * Evenement invokes from outside this class, and one that (unlike a Closure) survives
+     * serialization so the wiring is restored automatically. Not part of the public API.
      */
     public function updateIceGatheringState(): void
     {
