@@ -42,11 +42,15 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
         $pc1 = new RTCPeerConnection();
         $pc2 = new RTCPeerConnection();
 
+        // pc2 records what it receives on the data channel and keeps a handle to reply later. It
+        // does NOT echo before the cycle, so the association's inbound direction on pc1 is quiescent
+        // when it is serialized (no half-delivered stream to reconcile on resume).
         $pc2Received = [];
-        $pc2->on('datachannel', function (RTCDataChannel $channel) use (&$pc2Received): void {
-            $channel->on('message', function ($message) use ($channel, &$pc2Received): void {
+        $pc2Channel = null;
+        $pc2->on('datachannel', function (RTCDataChannel $channel) use (&$pc2Received, &$pc2Channel): void {
+            $pc2Channel = $channel;
+            $channel->on('message', function ($message) use (&$pc2Received): void {
                 $pc2Received[] = $message;
-                $channel->send('echo:' . $message);
             });
         });
 
@@ -78,7 +82,20 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
 
         $this->assertNull($weak->get(), 'the connected peer was pinned and not garbage-collected after unset');
 
-        $restored = unserialize($blob);
+        // Disable the cycle collector across unserialize(). The internal event listeners are held
+        // in WeakMaps, and while the object graph is being rebuilt a listener is momentarily
+        // reachable only through an as-yet-unanchored reference cycle; an automatic collection in
+        // that window would drop it, silently breaking the resumed peer's inbound path. The graph
+        // is fully strongly-anchored again by the time unserialize() returns.
+        $gcWasEnabled = gc_enabled();
+        gc_disable();
+        try {
+            $restored = unserialize($blob);
+        } finally {
+            if ($gcWasEnabled) {
+                gc_enable();
+            }
+        }
         $this->assertInstanceOf(RTCPeerConnection::class, $restored);
 
         // The restored peer still holds an open data channel; the app re-attaches its handler.
@@ -94,12 +111,18 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
             $restoredReceived[] = $message;
         });
         $this->assertDataChannelOpen($restoredDc);
+        $this->assertNotNull($pc2Channel);
 
-        // Activity resumes: data flows both ways over the resumed association.
+        // Activity resumes over the rebound sockets: the restored peer sends and the live peer
+        // receives it (proving the association carries application data again)...
         $restoredDc->send('after');
-        $this->waitUntil(fn () => $restoredReceived === ['echo:after'], 10.0);
+        $this->waitUntil(fn () => $pc2Received === ['before', 'after'], 15.0);
         $this->assertSame(['before', 'after'], $pc2Received);
-        $this->assertSame(['echo:after'], $restoredReceived);
+
+        // ...and the live peer sends back, which the restored peer receives (both directions).
+        $pc2Channel->send('reply');
+        $this->waitUntil(fn () => $restoredReceived === ['reply'], 15.0);
+        $this->assertSame(['reply'], $restoredReceived);
 
         $restored->close();
         $pc2->close();
