@@ -1,3 +1,4 @@
 # Exclude tests and documentation from `git archive` / Composer dist tarballs.
 tests/ export-ignore
 *.md export-ignore
+vendor-bin/ export-ignore
