@@ -116,7 +116,10 @@ jobs:
       - name: Install FFmpeg 9.0.1 on macOS
         if: matrix.os == 'macos-latest' && steps.ffmpeg-cache.outputs.cache-hit != 'true'
         run: |
-          brew install nasm pkg-config x264 x265 libvpx fdk-aac lame opus
+          # fdk-aac was removed from homebrew-core, so it is no longer installable here.
+          # The media-flow tests only exercise Opus, PCMA/PCMU, VP8/VP9 and H264 — no AAC —
+          # so we drop libfdk-aac (and the --enable-nonfree it required) on macOS.
+          brew install nasm pkg-config x264 x265 libvpx lame opus
           git clone --depth 1 --branch n9.0.1 https://github.com/FFmpeg/FFmpeg.git
           cd FFmpeg
           BREW_PREFIX="$(brew --prefix)"
@@ -127,18 +130,18 @@ jobs:
           # with "ERROR: libmp3lame >= 3.98.3 not found". The .pc-shipping codecs are already
           # found via PKG_CONFIG_PATH above.
           ./configure --prefix="$RUNNER_TOOL_CACHE/ffmpeg-9.0.1" \
-            --enable-shared --enable-gpl --enable-nonfree \
+            --enable-shared --enable-gpl \
             --extra-cflags="-I$BREW_PREFIX/include" \
             --extra-ldflags="-L$BREW_PREFIX/lib" \
             --enable-libx264 --enable-libx265 --enable-libvpx \
-            --enable-libfdk-aac --enable-libmp3lame --enable-libopus
+            --enable-libmp3lame --enable-libopus
           make -j$(sysctl -n hw.logicalcpu)
           make install
 
       - name: Install Homebrew FFmpeg runtime deps on macOS
         # Cached dylibs still need the Homebrew codec libs they were linked against.
         if: matrix.os == 'macos-latest'
-        run: brew install x264 x265 libvpx fdk-aac lame opus
+        run: brew install x264 x265 libvpx lame opus
 
       - name: Verify FFmpeg 9 libraries
         # Only the platforms that run the transcoding test build FFmpeg; Windows skips it.
