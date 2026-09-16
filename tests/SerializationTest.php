@@ -5,8 +5,10 @@ namespace Tests\Webrtc\Webrtc;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use ReflectionProperty;
 use WeakReference;
+use Webrtc\DataChannel\Listener\DataChannelMessageListener;
 use Webrtc\DataChannel\RTCDataChannel;
 use Webrtc\DataChannel\RTCDataChannelParameters;
+use Webrtc\Webrtc\Listener\PeerConnectionDataChannelListener;
 use Webrtc\Webrtc\RTCPeerConnection;
 use function Amp\delay;
 
@@ -36,12 +38,44 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
         // pc2 records what it receives on the data channel and keeps a handle to reply later.
         $pc2Received = [];
         $pc2Channel = null;
-        $pc2->on('datachannel', function (RTCDataChannel $channel) use (&$pc2Received, &$pc2Channel): void {
-            $pc2Channel = $channel;
-            $channel->on('message', function ($message) use (&$pc2Received): void {
-                $pc2Received[] = $message;
-            });
-        });
+        // Typed listeners replace the former Evenement closures; the registries are WeakMaps, so
+        // each listener is held by a strong local reference for the test's lifetime (the arrival
+        // listener also holds the message listener it creates).
+        $pc2DataChannelListener = new class($pc2Received, $pc2Channel) implements PeerConnectionDataChannelListener {
+            /** @var list<mixed> */
+            public array $received;
+            public mixed $channel;
+            /** @var list<object> Keeps the per-channel message listener alive against the WeakMap. */
+            public array $kept = [];
+
+            public function __construct(array &$received, mixed &$channel)
+            {
+                $this->received = &$received;
+                $this->channel = &$channel;
+            }
+
+            public function onPeerConnectionDataChannel(RTCDataChannel $channel): void
+            {
+                $this->channel = $channel;
+                $messageListener = new class($this->received) implements DataChannelMessageListener {
+                    /** @var list<mixed> */
+                    public array $received;
+
+                    public function __construct(array &$received)
+                    {
+                        $this->received = &$received;
+                    }
+
+                    public function onDataChannelMessage(string $data): void
+                    {
+                        $this->received[] = $data;
+                    }
+                };
+                $channel->addMessageListener($messageListener);
+                $this->kept[] = $messageListener;
+            }
+        };
+        $pc2->addPeerConnectionDataChannelListener($pc2DataChannelListener);
 
         $dc = $pc1->createDataChannel(new RTCDataChannelParameters(label: 'chat'));
 
@@ -90,9 +124,21 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
         $restoredDc = array_values($channels)[0];
         $this->assertInstanceOf(RTCDataChannel::class, $restoredDc);
         $restoredReceived = [];
-        $restoredDc->on('message', function ($message) use (&$restoredReceived): void {
-            $restoredReceived[] = $message;
-        });
+        $restoredMessageListener = new class($restoredReceived) implements DataChannelMessageListener {
+            /** @var list<mixed> */
+            public array $received;
+
+            public function __construct(array &$received)
+            {
+                $this->received = &$received;
+            }
+
+            public function onDataChannelMessage(string $data): void
+            {
+                $this->received[] = $data;
+            }
+        };
+        $restoredDc->addMessageListener($restoredMessageListener);
         $this->assertDataChannelOpen($restoredDc);
         $this->assertNotNull($pc2Channel);
 

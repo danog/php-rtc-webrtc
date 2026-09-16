@@ -2,26 +2,55 @@
 
 namespace Tests\Webrtc\Webrtc;
 
+use Closure;
+use Webrtc\DataChannel\Listener\DataChannelMessageListener;
+use Webrtc\DataChannel\Listener\DataChannelOpenListener;
+use Webrtc\DataChannel\RTCDataChannel;
+use Webrtc\RTP\MediaStreamTrack\MediaStreamTrack;
 use Webrtc\SDP\RTCSessionDescription;
+use Webrtc\Webrtc\Listener\PeerConnectionConnectionStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionDataChannelListener;
+use Webrtc\Webrtc\Listener\PeerConnectionIceConnectionStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionIceGatheringStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionSignalingStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionTrackListener;
 use Webrtc\Webrtc\RTCConfigurationInterface;
 use Webrtc\Webrtc\RTCPeerConnection;
 
 class RTCPeerConnectionHelper
 {
     /**
+     * The listener registries are WeakMaps, so a typed listener object must be held strongly
+     * somewhere for as long as the test needs it. This static sink keeps every listener the helper
+     * registers alive for the lifetime of the test process.
+     *
+     * @var list<object>
+     */
+    private static array $keptListeners = [];
+
+    /**
      * Create a peer connection whose receivers expose encoded media.
      */
     public static function createPeerConnection(null|array|RTCConfigurationInterface $configuration = null): RTCPeerConnection
     {
         $pc = new RTCPeerConnection($configuration);
-        $pc->on('track', function ($track) use ($pc): void {
-            foreach ($pc->getReceivers() as $receiver) {
-                if ($receiver->getTrack() === $track) {
-                    $receiver->setRawMode(true);
-                    return;
+        $listener = new class($pc) implements PeerConnectionTrackListener {
+            public function __construct(private RTCPeerConnection $pc)
+            {
+            }
+
+            public function onPeerConnectionTrack(MediaStreamTrack $track): void
+            {
+                foreach ($this->pc->getReceivers() as $receiver) {
+                    if ($receiver->getTrack() === $track) {
+                        $receiver->setRawMode(true);
+                        return;
+                    }
                 }
             }
-        });
+        };
+        $pc->addTrackListener($listener);
+        self::$keptListeners[] = $listener;
 
         return $pc;
     }
@@ -67,21 +96,45 @@ class RTCPeerConnectionHelper
             'signalingState' => [$pc->getSignalingState()],
         ];
 
-        $pc->on('connectionstatechange', function() use (&$states, $pc) {
-            $states['connectionState'][] = $pc->getConnectionState();
-        });
+        $listener = new class($pc, $states) implements
+            PeerConnectionConnectionStateChangeListener,
+            PeerConnectionIceConnectionStateChangeListener,
+            PeerConnectionIceGatheringStateChangeListener,
+            PeerConnectionSignalingStateChangeListener {
+            /** @var array<string, list<mixed>> */
+            public array $states;
 
-        $pc->on('iceconnectionstatechange', function() use (&$states, $pc) {
-            $states['iceConnectionState'][] = $pc->getIceConnectionState();
-        });
+            public function __construct(private RTCPeerConnection $pc, array &$states)
+            {
+                $this->states = &$states;
+            }
 
-        $pc->on('icegatheringstatechange', function() use (&$states, $pc) {
-            $states['iceGatheringState'][] = $pc->getIceGatheringState();
-        });
+            public function onPeerConnectionConnectionStateChange(): void
+            {
+                $this->states['connectionState'][] = $this->pc->getConnectionState();
+            }
 
-        $pc->on('signalingstatechange', function() use (&$states, $pc) {
-            $states['signalingState'][] = $pc->getSignalingState();
-        });
+            public function onPeerConnectionIceConnectionStateChange(): void
+            {
+                $this->states['iceConnectionState'][] = $this->pc->getIceConnectionState();
+            }
+
+            public function onPeerConnectionIceGatheringStateChange(): void
+            {
+                $this->states['iceGatheringState'][] = $this->pc->getIceGatheringState();
+            }
+
+            public function onPeerConnectionSignalingStateChange(): void
+            {
+                $this->states['signalingState'][] = $this->pc->getSignalingState();
+            }
+        };
+
+        $pc->addConnectionStateChangeListener($listener);
+        $pc->addIceConnectionStateChangeListener($listener);
+        $pc->addIceGatheringStateChangeListener($listener);
+        $pc->addSignalingStateChangeListener($listener);
+        self::$keptListeners[] = $listener;
     }
 
     /**
@@ -89,8 +142,81 @@ class RTCPeerConnectionHelper
      */
     public static function trackRemoteTracks(RTCPeerConnection $pc, array &$tracks): void
     {
-        $pc->on('track', function($track) use (&$tracks) {
-            $tracks[] = $track;
-        });
+        $listener = new class($tracks) implements PeerConnectionTrackListener {
+            /** @var list<MediaStreamTrack> */
+            public array $tracks;
+
+            public function __construct(array &$tracks)
+            {
+                $this->tracks = &$tracks;
+            }
+
+            public function onPeerConnectionTrack(MediaStreamTrack $track): void
+            {
+                $this->tracks[] = $track;
+            }
+        };
+        $pc->addTrackListener($listener);
+        self::$keptListeners[] = $listener;
+    }
+
+    /**
+     * Register a "datachannel" handler as a typed listener (was $pc->on('datachannel', ...)).
+     *
+     * The closure body is unchanged; the anonymous listener adapts it to
+     * {@see PeerConnectionDataChannelListener} and is held strongly against the WeakMap registry.
+     */
+    public static function onDataChannel(RTCPeerConnection $pc, Closure $callback): void
+    {
+        $listener = new class($callback) implements PeerConnectionDataChannelListener {
+            public function __construct(private Closure $callback)
+            {
+            }
+
+            public function onPeerConnectionDataChannel(RTCDataChannel $channel): void
+            {
+                ($this->callback)($channel);
+            }
+        };
+        $pc->addPeerConnectionDataChannelListener($listener);
+        self::$keptListeners[] = $listener;
+    }
+
+    /**
+     * Register a data-channel "message" handler as a typed listener (was $channel->on('message', ...)).
+     */
+    public static function onMessage(RTCDataChannel $channel, Closure $callback): void
+    {
+        $listener = new class($callback) implements DataChannelMessageListener {
+            public function __construct(private Closure $callback)
+            {
+            }
+
+            public function onDataChannelMessage(string $data): void
+            {
+                ($this->callback)($data);
+            }
+        };
+        $channel->addMessageListener($listener);
+        self::$keptListeners[] = $listener;
+    }
+
+    /**
+     * Register a data-channel "open" handler as a typed listener (was $channel->on('open', ...)).
+     */
+    public static function onOpen(RTCDataChannel $channel, Closure $callback): void
+    {
+        $listener = new class($callback) implements DataChannelOpenListener {
+            public function __construct(private Closure $callback)
+            {
+            }
+
+            public function onDataChannelOpen(): void
+            {
+                ($this->callback)();
+            }
+        };
+        $channel->addOpenListener($listener);
+        self::$keptListeners[] = $listener;
     }
 }

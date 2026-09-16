@@ -12,7 +12,6 @@
 namespace Webrtc\Webrtc;
 
 use DateInvalidOperationException;
-use Evenement\EventEmitter;
 use Override;
 use Psr\Log\LoggerInterface;
 use Ramsey\Uuid\Uuid;
@@ -28,6 +27,7 @@ use Webrtc\DTLS\DTLS\Exception\RTCCertificateException;
 use Webrtc\DTLS\DTLS\Exception\TLSException;
 use Webrtc\DTLS\DTLS\RTCCertificate;
 use Webrtc\DTLS\DTLS\RTCDtlsTransport;
+use Webrtc\DTLS\Listener\DtlsTransportStateChangeListener;
 use Webrtc\DTLS\Exception\OpenSSLException;
 use Webrtc\DTLS\Exception\SSLException;
 use Webrtc\DTLS\Exception\SysCallException;
@@ -37,6 +37,8 @@ use Webrtc\Exception\RuntimeException;
 use Webrtc\ICE\Enum\IceGatheringState;
 use Webrtc\ICE\Enum\IceRole;
 use Webrtc\ICE\Enum\IceTransportState;
+use Webrtc\ICE\Listener\IceGathererStateChangeListener;
+use Webrtc\ICE\Listener\IceTransportStateChangeListener;
 use Webrtc\ICE\RTCIceCandidate;
 use Webrtc\ICE\RTCIceGatherer;
 use Webrtc\ICE\RTCIceParameters;
@@ -83,6 +85,12 @@ use Webrtc\Stats\RTCStatsReport;
 use Webrtc\Webrtc\Enum\ConnectionState;
 use Webrtc\Webrtc\Enum\IceConnectionState;
 use Webrtc\Webrtc\Enum\SignalingState;
+use Webrtc\Webrtc\Listener\PeerConnectionConnectionStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionDataChannelListener;
+use Webrtc\Webrtc\Listener\PeerConnectionIceConnectionStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionIceGatheringStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionSignalingStateChangeListener;
+use Webrtc\Webrtc\Listener\PeerConnectionTrackListener;
 use Webrtc\Mixin\SerializableState;
 
 /**
@@ -106,8 +114,44 @@ use Webrtc\Mixin\SerializableState;
  * - "track": Fired when a new media track is received
  * - "datachannel": Fired when a new data channel is created by the remote peer
  */
-final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionInterface, DataChannelListener
+final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannelListener, IceGathererStateChangeListener, IceTransportStateChangeListener, DtlsTransportStateChangeListener
 {
+    /**
+     * Application listeners for a received remote media track.
+     * @var \WeakMap<PeerConnectionTrackListener, null>
+     */
+    private \WeakMap $trackListeners;
+
+    /**
+     * Application listeners for a remotely-opened data channel.
+     * @var \WeakMap<PeerConnectionDataChannelListener, null>
+     */
+    private \WeakMap $peerConnectionDataChannelListeners;
+
+    /**
+     * Application listeners for signaling-state changes.
+     * @var \WeakMap<PeerConnectionSignalingStateChangeListener, null>
+     */
+    private \WeakMap $signalingStateChangeListeners;
+
+    /**
+     * Application listeners for overall connection-state changes.
+     * @var \WeakMap<PeerConnectionConnectionStateChangeListener, null>
+     */
+    private \WeakMap $connectionStateChangeListeners;
+
+    /**
+     * Application listeners for ICE connection-state changes.
+     * @var \WeakMap<PeerConnectionIceConnectionStateChangeListener, null>
+     */
+    private \WeakMap $iceConnectionStateChangeListeners;
+
+    /**
+     * Application listeners for ICE gathering-state changes.
+     * @var \WeakMap<PeerConnectionIceGatheringStateChangeListener, null>
+     */
+    private \WeakMap $iceGatheringStateChangeListeners;
+
     /**
      * Port number used for discard protocol (used as placeholder in SDP)
      */
@@ -276,6 +320,142 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         $this->certificates[] = new RTCCertificate($this->configuration->getPrivateKeyPath(), $this->configuration->getCertificatePath());
         $this->cname = Uuid::uuid4()->toString();
         $this->streamId = Uuid::uuid4()->toString();
+
+        /** @var \WeakMap<PeerConnectionTrackListener, null> */
+        $this->trackListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionDataChannelListener, null> */
+        $this->peerConnectionDataChannelListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionSignalingStateChangeListener, null> */
+        $this->signalingStateChangeListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionConnectionStateChangeListener, null> */
+        $this->connectionStateChangeListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionIceConnectionStateChangeListener, null> */
+        $this->iceConnectionStateChangeListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionIceGatheringStateChangeListener, null> */
+        $this->iceGatheringStateChangeListeners = new \WeakMap();
+    }
+
+    /**
+     * Register a listener notified when a remote media track is received (was the "track" event).
+     */
+    public function addTrackListener(PeerConnectionTrackListener $listener): void
+    {
+        $this->trackListeners[$listener] = null;
+    }
+
+    /**
+     * Register a listener notified when a remotely-opened data channel arrives (was "datachannel").
+     */
+    public function addPeerConnectionDataChannelListener(PeerConnectionDataChannelListener $listener): void
+    {
+        $this->peerConnectionDataChannelListeners[$listener] = null;
+    }
+
+    /**
+     * Register a listener notified when the signaling state changes (was "signalingstatechange").
+     */
+    public function addSignalingStateChangeListener(PeerConnectionSignalingStateChangeListener $listener): void
+    {
+        $this->signalingStateChangeListeners[$listener] = null;
+    }
+
+    /**
+     * Register a listener notified when the connection state changes (was "connectionstatechange").
+     */
+    public function addConnectionStateChangeListener(PeerConnectionConnectionStateChangeListener $listener): void
+    {
+        $this->connectionStateChangeListeners[$listener] = null;
+    }
+
+    /**
+     * Register a listener notified when the ICE connection state changes (was
+     * "iceconnectionstatechange").
+     */
+    public function addIceConnectionStateChangeListener(PeerConnectionIceConnectionStateChangeListener $listener): void
+    {
+        $this->iceConnectionStateChangeListeners[$listener] = null;
+    }
+
+    /**
+     * Register a listener notified when the ICE gathering state changes (was
+     * "icegatheringstatechange").
+     */
+    public function addIceGatheringStateChangeListener(PeerConnectionIceGatheringStateChangeListener $listener): void
+    {
+        $this->iceGatheringStateChangeListeners[$listener] = null;
+    }
+
+    private function notifyTrack(MediaStreamTrack $track): void
+    {
+        foreach ($this->trackListeners as $listener => $_) {
+            $listener->onPeerConnectionTrack($track);
+        }
+    }
+
+    private function notifyPeerConnectionDataChannel(RTCDataChannel $channel): void
+    {
+        foreach ($this->peerConnectionDataChannelListeners as $listener => $_) {
+            $listener->onPeerConnectionDataChannel($channel);
+        }
+    }
+
+    private function notifySignalingStateChange(): void
+    {
+        foreach ($this->signalingStateChangeListeners as $listener => $_) {
+            $listener->onPeerConnectionSignalingStateChange();
+        }
+    }
+
+    private function notifyConnectionStateChange(): void
+    {
+        foreach ($this->connectionStateChangeListeners as $listener => $_) {
+            $listener->onPeerConnectionConnectionStateChange();
+        }
+    }
+
+    private function notifyIceConnectionStateChange(): void
+    {
+        foreach ($this->iceConnectionStateChangeListeners as $listener => $_) {
+            $listener->onPeerConnectionIceConnectionStateChange();
+        }
+    }
+
+    private function notifyIceGatheringStateChange(): void
+    {
+        foreach ($this->iceGatheringStateChangeListeners as $listener => $_) {
+            $listener->onPeerConnectionIceGatheringStateChange();
+        }
+    }
+
+    /**
+     * Consumes an ICE gatherer's state-change notification (was the "statechange" callable
+     * registered on the gatherer).
+     */
+    #[\Override]
+    public function onIceGathererStateChange(IceGatheringState $state): void
+    {
+        $this->updateIceGatheringState();
+    }
+
+    /**
+     * Consumes an ICE transport's state-change notification (was the "statechange" callables
+     * registered on the transport).
+     */
+    #[\Override]
+    public function onIceTransportStateChange(IceTransportState $state): void
+    {
+        $this->updateIceConnectionState();
+        $this->updateConnectionState();
+    }
+
+    /**
+     * Consumes a DTLS transport's state-change notification (was the "statechange" callable
+     * registered on the transport).
+     */
+    #[\Override]
+    public function onDtlsTransportStateChange(): void
+    {
+        $this->updateConnectionState();
     }
 
     /**
@@ -420,7 +600,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     public function setSignalingState(SignalingState $signalingState): void
     {
         $this->signalingState = $signalingState;
-        $this->emit("signalingstatechange");
+        $this->notifySignalingStateChange();
     }
 
     /**
@@ -566,7 +746,18 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         $this->updateIceConnectionState();
         $this->updateConnectionState();
 
-        $this->removeAllListeners();
+        /** @var \WeakMap<PeerConnectionTrackListener, null> */
+        $this->trackListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionDataChannelListener, null> */
+        $this->peerConnectionDataChannelListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionSignalingStateChangeListener, null> */
+        $this->signalingStateChangeListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionConnectionStateChangeListener, null> */
+        $this->connectionStateChangeListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionIceConnectionStateChangeListener, null> */
+        $this->iceConnectionStateChangeListeners = new \WeakMap();
+        /** @var \WeakMap<PeerConnectionIceGatheringStateChangeListener, null> */
+        $this->iceGatheringStateChangeListeners = new \WeakMap();
     }
 
     /**
@@ -843,7 +1034,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     #[\Override]
     public function onDataChannel(RTCDataChannel $channel): void
     {
-        $this->emit('datachannel', [$channel]);
+        $this->notifyPeerConnectionDataChannel($channel);
     }
 
     /**
@@ -867,16 +1058,15 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         }
 
         $iceGatherer = new RTCIceGatherer($iceServers, $this->configuration->iceSettings(), $this->logger);
-        $iceGatherer->on("statechange", [$this, 'updateIceGatheringState']);
+        $iceGatherer->addStateChangeListener($this);
         $iceTransport = new RTCIceTransport($iceGatherer, $this->logger);
-        $iceTransport->on("statechange", [$this, 'updateIceConnectionState']);
-        $iceTransport->on("statechange", [$this, 'updateConnectionState']);
+        $iceTransport->addStateChangeListener($this);
         $this->iceTransports[spl_object_id($iceTransport)] = $iceTransport;
 
         // create DTLS transport
         $dtlsTransport = new RTCDtlsTransport($iceTransport, $this->certificates[0]);
         $dtlsTransport->setLogger($this->logger);
-        $dtlsTransport->on("statechange", [$this, 'updateConnectionState']);
+        $dtlsTransport->addStateChangeListener($this);
         $this->dtlsTransports[spl_object_id($dtlsTransport)] = $dtlsTransport;
 
         //update states
@@ -1231,7 +1421,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
 
         foreach ($trackEvents as $trackEvent) {
             if ($trackEvent !== null) {
-                $this->emit("track", [$trackEvent->track]);
+                $this->notifyTrack($trackEvent->track);
             }
         }
 
@@ -1804,9 +1994,9 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     /**
      * Updates the connection state based on transport states.
      *
-     * @internal Public only because it is registered as the serializable listener
-     * `[$this, 'updateConnectionState']` on the ICE and DTLS transports' emitters — an array
-     * callable Evenement invokes from outside this class, and one that (unlike a Closure) survives
+     * @internal Public only because RTCPeerConnection registers itself as a typed state-change
+     * listener on the child ICE and DTLS transports (other packages' objects), which invoke this
+     * from outside this class. Being plain object wiring rather than a Closure, it survives
      * serialization so the wiring is restored automatically. Not part of the public API.
      */
     public function updateConnectionState(): void
@@ -1838,7 +2028,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         if ($state !== $this->connectionState) {
             $this->debug(sprintf("connectionState %s -> %s", $this->connectionState->name, $state->name));
             $this->connectionState = $state;
-            $this->emit("connectionstatechange");
+            $this->notifyConnectionStateChange();
         }
 
         if (!$this->isClosed && isset($dtlsStates[TLSState::CLOSED->value])) {
@@ -1849,9 +2039,9 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
     /**
      * Updates the ICE connection state based on transport states.
      *
-     * @internal Public only because it is registered as the serializable listener
-     * `[$this, 'updateIceConnectionState']` on the ICE transport's emitter — an array callable
-     * Evenement invokes from outside this class, and one that (unlike a Closure) survives
+     * @internal Public only because RTCPeerConnection registers itself as a typed state-change
+     * listener on the child ICE transport (another package's object), which invokes this from
+     * outside this class. Being plain object wiring rather than a Closure, it survives
      * serialization so the wiring is restored automatically. Not part of the public API.
      */
     public function updateIceConnectionState(): void
@@ -1875,18 +2065,18 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         if ($state !== $this->iceConnectionState) {
             $this->debug(sprintf("iceConnectionState %s -> %s", $this->iceConnectionState->name, $state->name));
             $this->iceConnectionState = $state;
-            $this->emit("iceconnectionstatechange");
+            $this->notifyIceConnectionStateChange();
         }
     }
 
     /**
      * Updates the ICE gathering state based on the state of all ICE transports.
      *
-     * Emits "icegatheringstatechange" if the state changes.
+     * Notifies "icegatheringstatechange" listeners if the state changes.
      *
-     * @internal Public only because it is registered as the serializable listener
-     * `[$this, 'updateIceGatheringState']` on each ICE gatherer's emitter — an array callable
-     * Evenement invokes from outside this class, and one that (unlike a Closure) survives
+     * @internal Public only because RTCPeerConnection registers itself as a typed state-change
+     * listener on each child ICE gatherer (another package's object), which invokes this from
+     * outside this class. Being plain object wiring rather than a Closure, it survives
      * serialization so the wiring is restored automatically. Not part of the public API.
      */
     public function updateIceGatheringState(): void
@@ -1911,7 +2101,7 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
         if ($state !== $this->iceGatheringState) {
             $this->logger?->debug(sprintf("iceGatheringState %s -> %s", $this->iceGatheringState->name, $state->name));
             $this->iceGatheringState = $state;
-            $this->emit('icegatheringstatechange');
+            $this->notifyIceGatheringStateChange();
         }
     }
 
@@ -2249,7 +2439,23 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
      */
     public function __serialize(): array
     {
-        return SerializableState::export($this);
+        $state = SerializableState::export($this, [
+            // WeakMaps cannot be serialized; snapshot their keys and rebuild on the far side.
+            'trackListeners' => ['__uninitialized' => true],
+            'peerConnectionDataChannelListeners' => ['__uninitialized' => true],
+            'signalingStateChangeListeners' => ['__uninitialized' => true],
+            'connectionStateChangeListeners' => ['__uninitialized' => true],
+            'iceConnectionStateChangeListeners' => ['__uninitialized' => true],
+            'iceGatheringStateChangeListeners' => ['__uninitialized' => true],
+        ]);
+        $state['__trackListeners'] = SerializableState::weakMapToList($this->trackListeners);
+        $state['__peerConnectionDataChannelListeners'] = SerializableState::weakMapToList($this->peerConnectionDataChannelListeners);
+        $state['__signalingStateChangeListeners'] = SerializableState::weakMapToList($this->signalingStateChangeListeners);
+        $state['__connectionStateChangeListeners'] = SerializableState::weakMapToList($this->connectionStateChangeListeners);
+        $state['__iceConnectionStateChangeListeners'] = SerializableState::weakMapToList($this->iceConnectionStateChangeListeners);
+        $state['__iceGatheringStateChangeListeners'] = SerializableState::weakMapToList($this->iceGatheringStateChangeListeners);
+
+        return $state;
     }
 
     /**
@@ -2257,7 +2463,41 @@ final class RTCPeerConnection extends EventEmitter implements RTCPeerConnectionI
      */
     public function __unserialize(array $data): void
     {
+        /** @var list<PeerConnectionTrackListener> $trackListeners */
+        $trackListeners = $data['__trackListeners'] ?? [];
+        /** @var list<PeerConnectionDataChannelListener> $peerConnectionDataChannelListeners */
+        $peerConnectionDataChannelListeners = $data['__peerConnectionDataChannelListeners'] ?? [];
+        /** @var list<PeerConnectionSignalingStateChangeListener> $signalingStateChangeListeners */
+        $signalingStateChangeListeners = $data['__signalingStateChangeListeners'] ?? [];
+        /** @var list<PeerConnectionConnectionStateChangeListener> $connectionStateChangeListeners */
+        $connectionStateChangeListeners = $data['__connectionStateChangeListeners'] ?? [];
+        /** @var list<PeerConnectionIceConnectionStateChangeListener> $iceConnectionStateChangeListeners */
+        $iceConnectionStateChangeListeners = $data['__iceConnectionStateChangeListeners'] ?? [];
+        /** @var list<PeerConnectionIceGatheringStateChangeListener> $iceGatheringStateChangeListeners */
+        $iceGatheringStateChangeListeners = $data['__iceGatheringStateChangeListeners'] ?? [];
+        unset(
+            $data['__trackListeners'],
+            $data['__peerConnectionDataChannelListeners'],
+            $data['__signalingStateChangeListeners'],
+            $data['__connectionStateChangeListeners'],
+            $data['__iceConnectionStateChangeListeners'],
+            $data['__iceGatheringStateChangeListeners'],
+        );
+
         SerializableState::import($this, $data);
+        /** @var \WeakMap<PeerConnectionTrackListener, null> */
+        $this->trackListeners = SerializableState::listToWeakMap($trackListeners);
+        /** @var \WeakMap<PeerConnectionDataChannelListener, null> */
+        $this->peerConnectionDataChannelListeners = SerializableState::listToWeakMap($peerConnectionDataChannelListeners);
+        /** @var \WeakMap<PeerConnectionSignalingStateChangeListener, null> */
+        $this->signalingStateChangeListeners = SerializableState::listToWeakMap($signalingStateChangeListeners);
+        /** @var \WeakMap<PeerConnectionConnectionStateChangeListener, null> */
+        $this->connectionStateChangeListeners = SerializableState::listToWeakMap($connectionStateChangeListeners);
+        /** @var \WeakMap<PeerConnectionIceConnectionStateChangeListener, null> */
+        $this->iceConnectionStateChangeListeners = SerializableState::listToWeakMap($iceConnectionStateChangeListeners);
+        /** @var \WeakMap<PeerConnectionIceGatheringStateChangeListener, null> */
+        $this->iceGatheringStateChangeListeners = SerializableState::listToWeakMap($iceGatheringStateChangeListeners);
+
         if ($this->connecting) {
             $this->connecting = false;
             $this->scheduleConnect();

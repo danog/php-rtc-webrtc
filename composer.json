@@ -37,7 +37,6 @@
         "danog/php-rtc-dtls": "^1.1.9 || ^2.0",
         "danog/php-rtc-ntp": "^1.1.6",
         "danog/php-rtc-mixin": "^2.0",
-        "evenement/evenement": "^3.0.2",
         "symfony/polyfill-php84": "*"
     },
     "require-dev": {

@@ -109,11 +109,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
-        $pc2->on("datachannel", function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
+        RTCPeerConnectionHelper::onDataChannel($pc2, function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
             $this->assertEquals(State::Open, $channel->getReadyState());
             $pc2DataChannels[] = $channel;
 
-            $channel->on("message", function ($message) use ($channel, &$pc2DataMessages) {
+            RTCPeerConnectionHelper::onMessage($channel, function ($message) use ($channel, &$pc2DataMessages) {
                 $pc2DataMessages[] = $message;
                 $channel->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
             });
@@ -129,7 +129,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc->getReadyState());
 
         // send messages
-        $dc->on("open", function () use ($dc) {
+        RTCPeerConnectionHelper::onOpen($dc, function () use ($dc) {
             $dc->send("hello");
             $dc->send("");
             $dc->send("\x00\x01\x02\x03");
@@ -140,7 +140,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
             $this->assertEquals(0, $dc->getBufferedAmount());
         });
 
-        $dc->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
@@ -279,11 +279,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
-        $pc2->on("datachannel", function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
+        RTCPeerConnectionHelper::onDataChannel($pc2, function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
             $this->assertEquals(State::Open, $channel->getReadyState());
             $pc2DataChannels[] = $channel;
 
-            $channel->on("message", function ($message) use ($channel, &$pc2DataMessages) {
+            RTCPeerConnectionHelper::onMessage($channel, function ($message) use ($channel, &$pc2DataMessages) {
                 $pc2DataMessages[] = $message;
                 $channel->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
             });
@@ -299,7 +299,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc->getReadyState());
 
         // send messages
-        $dc->on("open", function () use ($dc) {
+        RTCPeerConnectionHelper::onOpen($dc, function () use ($dc) {
             $dc->send("hello");
             $dc->send("");
             $dc->send("\x00\x01\x02\x03");
@@ -307,7 +307,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
             $dc->send($this->longData);
         });
 
-        $dc->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
@@ -462,11 +462,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals("bob", $dc2->getProtocol());
         $this->assertEquals(State::Connecting, $dc2->getReadyState());
 
-        $dc1->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc1, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
-        $dc2->on("message", function ($message) use (&$pc2DataMessages, $dc2) {
+        RTCPeerConnectionHelper::onMessage($dc2, function ($message) use (&$pc2DataMessages, $dc2) {
             $pc2DataMessages[] = $message;
             $dc2->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
         });
@@ -692,11 +692,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
-        $pc2->on("datachannel", function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
+        RTCPeerConnectionHelper::onDataChannel($pc2, function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
             $this->assertEquals(State::Open, $channel->getReadyState());
             $pc2DataChannels[] = $channel;
 
-            $channel->on("message", function ($message) use ($channel, &$pc2DataMessages) {
+            RTCPeerConnectionHelper::onMessage($channel, function ($message) use ($channel, &$pc2DataMessages) {
                 $pc2DataMessages[] = $message;
                 $channel->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
             });
@@ -712,7 +712,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc->getReadyState());
 
         // send messages
-        $dc->on("open", function () use ($dc) {
+        RTCPeerConnectionHelper::onOpen($dc, function () use ($dc) {
             $dc->send("hello");
             $dc->send("");
             $dc->send("\x00\x01\x02\x03");
@@ -720,7 +720,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
             $dc->send($this->longData);
         });
 
-        $dc->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
@@ -963,11 +963,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
-        $pc2->on("datachannel", function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
+        RTCPeerConnectionHelper::onDataChannel($pc2, function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
             $this->assertEquals(State::Open, $channel->getReadyState());
             $pc2DataChannels[] = $channel;
 
-            $channel->on("message", function ($message) use ($channel, &$pc2DataMessages) {
+            RTCPeerConnectionHelper::onMessage($channel, function ($message) use ($channel, &$pc2DataMessages) {
                 $pc2DataMessages[] = $message;
                 $channel->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
             });
@@ -983,7 +983,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc->getReadyState());
 
         // send messages
-        $dc->on("open", function () use ($dc) {
+        RTCPeerConnectionHelper::onOpen($dc, function () use ($dc) {
             $dc->send("hello");
             $dc->send("");
             $dc->send("\x00\x01\x02\x03");
@@ -991,7 +991,7 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
             $dc->send($this->longData);
         });
 
-        $dc->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
@@ -1142,11 +1142,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
-        $pc2->on("datachannel", function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
+        RTCPeerConnectionHelper::onDataChannel($pc2, function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
             $this->assertEquals(State::Open, $channel->getReadyState());
             $pc2DataChannels[] = $channel;
 
-            $channel->on("message", function ($message) use ($channel, &$pc2DataMessages) {
+            RTCPeerConnectionHelper::onMessage($channel, function ($message) use ($channel, &$pc2DataMessages) {
                 $pc2DataMessages[] = $message;
                 $channel->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
             });
@@ -1162,11 +1162,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc->getReadyState());
 
         // send message
-        $dc->on("open", function () use ($dc) {
+        RTCPeerConnectionHelper::onOpen($dc, function () use ($dc) {
             $dc->send("hello");
         });
 
-        $dc->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
@@ -1260,11 +1260,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
-        $pc2->on("datachannel", function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
+        RTCPeerConnectionHelper::onDataChannel($pc2, function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
             $this->assertEquals(State::Open, $channel->getReadyState());
             $pc2DataChannels[] = $channel;
 
-            $channel->on("message", function ($message) use ($channel, &$pc2DataMessages) {
+            RTCPeerConnectionHelper::onMessage($channel, function ($message) use ($channel, &$pc2DataMessages) {
                 $pc2DataMessages[] = $message;
                 $channel->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
             });
@@ -1280,11 +1280,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc->getReadyState());
 
         // send message
-        $dc->on("open", function () use ($dc) {
+        RTCPeerConnectionHelper::onOpen($dc, function () use ($dc) {
             $dc->send("hello");
         });
 
-        $dc->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
@@ -1378,11 +1378,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
 
         RTCPeerConnectionHelper::trackStates($pc2, $pc2States);
 
-        $pc2->on("datachannel", function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
+        RTCPeerConnectionHelper::onDataChannel($pc2, function (RTCDataChannel $channel) use (&$pc2DataChannels, &$pc2DataMessages) {
             $this->assertEquals(State::Open, $channel->getReadyState());
             $pc2DataChannels[] = $channel;
 
-            $channel->on("message", function ($message) use ($channel, &$pc2DataMessages) {
+            RTCPeerConnectionHelper::onMessage($channel, function ($message) use ($channel, &$pc2DataMessages) {
                 $pc2DataMessages[] = $message;
                 $channel->send((SctpUtility::isBinary($message) ? "binary" : "string") . "-echo: " . $message);
             });
@@ -1398,11 +1398,11 @@ class RTCPeerConnectionDatachannelTest extends RTCPeerConnectionBaseTest
         $this->assertEquals(State::Connecting, $dc->getReadyState());
 
         // send a message
-        $dc->on("open", function () use ($dc) {
+        RTCPeerConnectionHelper::onOpen($dc, function () use ($dc) {
             $dc->send("hello");
         });
 
-        $dc->on("message", function ($message) use (&$pc1DataMessages) {
+        RTCPeerConnectionHelper::onMessage($dc, function ($message) use (&$pc1DataMessages) {
             $pc1DataMessages[] = $message;
         });
 
