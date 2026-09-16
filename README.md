@@ -48,6 +48,10 @@ This package is part of the PHP WebRTC library. For complete documentation, exam
 
 ### Authors
 
+- **Daniil Gentili**  
+  - Website: [daniil.it](https://daniil.it)
+  - GitHub: [danog](https://github.com/danog)
+
 - **Amin Yazdanpanah**  
   - Website: [aminyazdanpanah.com](https://www.aminyazdanpanah.com)
   - Email: [github@aminyazdanpanah.com](mailto:github@aminyazdanpanah.com)
