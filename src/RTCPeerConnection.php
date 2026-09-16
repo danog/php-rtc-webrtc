@@ -1592,7 +1592,13 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
         // configure sctp
         if ($media->getProfile() === "DTLS/SCTP") {
             $this->sctpLegacySdp = true;
-            $this->sctpRemotePort = (int)$media->getFmt()[0];
+            // Legacy DTLS/SCTP carries the SCTP port as the m-line fmt token. A bare (int) cast
+            // would turn a malformed value into port 0 and fail opaquely later; validate it.
+            $sctpPort = (string)($media->getFmt()[0] ?? '');
+            if (!ctype_digit($sctpPort)) {
+                throw new InvalidArgumentException("Invalid legacy DTLS/SCTP port in SDP: \"$sctpPort\"");
+            }
+            $this->sctpRemotePort = (int)$sctpPort;
         } else {
             $this->sctpLegacySdp = false;
             $this->sctpRemotePort = $media->getSctpPort();
@@ -2350,7 +2356,11 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
         if (strtolower($a->mimeType) === "video/h264") {
             try {
                 return $this->packetization($a) === $this->packetization($b) && $this->profile($a) === $this->profile($b);
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                // A malformed profile-level-id in the remote codec params makes the pair
+                // incompatible, but log it: otherwise H.264 is silently dropped from negotiation
+                // and surfaces only as an unexplained "no video".
+                $this->logger?->warning("Ignoring H.264 codec with unparseable parameters during codec matching: " . $e->getMessage());
                 return false;
             }
         }
