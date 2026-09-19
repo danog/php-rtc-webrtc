@@ -1498,6 +1498,17 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
         $preferredCodecs = $transceiver->getPreferredCodecs();
         $mutual = $this->findPreferredCodecs($this->findMutualCodecs($localCodecs, $remoteCodecs), $preferredCodecs);
         if (empty($mutual)) {
+            if ($media->getKind() === "video") {
+                // Video is optional: if the peer offers no codec we can also produce (for example we
+                // are playing a pre-encoded AV1 file but the peer only decodes VP8/VP9/H264), drop the
+                // video track instead of failing the whole call — the audio keeps working.
+                if (in_array($sessionDescription->getType(), ["answer", "pranswer"], true)) {
+                    $transceiver->setCurrentDirection(SDPDirections::inactive);
+                } else {
+                    $transceiver->setOfferDirection(SDPDirections::inactive);
+                }
+                return [null, null];
+            }
             throw new RuntimeException("Failed to set remote {$media->getKind()} description send parameters");
         }
         $transceiver->setCodecs($mutual);
