@@ -201,16 +201,16 @@ class RTCPeerConnectionDescriptionTest extends RTCPeerConnectionBaseTest
             type: $offer->getType()
         );
 
-
-        async(function () use ($pc1, $pc2) {
-            delay(.1);
-            $pc1->close();
-            $pc2->close();
-        });
-
-        $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage("Failed to set remote video description send parameters");
+        // Video is optional: when no mutually supported video codec exists, setRemoteDescription
+        // must not fail — the video transceiver is dropped (marked inactive) so audio can keep
+        // working instead of the whole call being torn down.
         $pc2->setRemoteDescription($mangled);
+
+        $videoTransceiver = $pc2->getTransceivers()[0];
+        $this->assertSame(SDPDirections::inactive, $videoTransceiver->getOfferDirection());
+
+        $pc1->close();
+        $pc2->close();
     }
 
     public function testSetRemoteDescriptionAcceptsRejectedMediaWithoutTransportOrCodecs()
