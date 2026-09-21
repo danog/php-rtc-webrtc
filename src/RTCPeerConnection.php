@@ -224,6 +224,12 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
     private ?int $sctpRemotePort = null;
 
     /**
+     * Whether the SCTP association runs in-band over the media transport, without an SDP
+     * `m=application` section (see {@see self::createInbandSctp()}).
+     */
+    private bool $sctpInband = false;
+
+    /**
      * Unique identifier for this peer connection's media streams
      */
     private string $streamId;
@@ -734,9 +740,12 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
 
         if (isset($this->sctp)) {
             $this->sctp->stop();
-            $dtlsTransport = $this->requireDtlsTransport($this->sctp->getDtlsTransport());
-            $dtlsTransport->stop();
-            $this->requireIceTransport($dtlsTransport->getIceTransport())->stop();
+            // An in-band association shares the first transceiver's transport, stopped above.
+            if (!$this->sctpInband) {
+                $dtlsTransport = $this->requireDtlsTransport($this->sctp->getDtlsTransport());
+                $dtlsTransport->stop();
+                $this->requireIceTransport($dtlsTransport->getIceTransport())->stop();
+            }
         }
 
         $this->isClosed = true;
@@ -1012,6 +1021,54 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
     }
 
     /**
+     * Run the SCTP association in-band over the media transport, outside SDP.
+     *
+     * Standard WebRTC negotiates data channels through an `m=application` section; tgcalls (both in
+     * one-to-one calls and towards the group call SFU) instead opens an SCTP association straight
+     * over the DTLS transport that carries the media, with fixed ports and no SDP at all. This sets
+     * that up: the association is bound to the first transceiver's DTLS transport (the BUNDLE master),
+     * is never described in offers or answers, and starts as soon as that transport connects.
+     * Data channels are then created with {@see self::createDataChannel()} as usual, or arrive from
+     * the peer through the data channel listener.
+     *
+     * @param bool|null $client Whether to initiate the association (and open the channels): true or
+     *                          false to force it, null to follow the ICE role like standard WebRTC.
+     * @param int       $remotePort The peer's SCTP port.
+     * @throws RuntimeException If no transceiver exists yet to carry the association, or SCTP is
+     *                          already set up through SDP.
+     */
+    public function createInbandSctp(?bool $client = null, int $remotePort = 5000): void
+    {
+        $this->checkNotClosed();
+        if ($this->sctp !== null) {
+            if ($this->sctpInband) {
+                return;
+            }
+            throw new RuntimeException("The SCTP association is already negotiated through SDP");
+        }
+        $master = $this->transceivers[0] ?? null;
+        if ($master === null) {
+            throw new RuntimeException("An in-band SCTP association needs a transceiver whose transport it can share");
+        }
+        $this->sctp = new RTCSctpTransport($this->requireDtlsTransport($master->getDtlsTransport()));
+        $this->sctp->setLogger($this->logger);
+        $this->sctp->addDataChannelListener($this);
+        $this->sctp->setBundled(true);
+        $this->sctp->setClientRole($client);
+        $this->sctpInband = true;
+        $this->sctpRemotePort = $remotePort;
+        $this->scheduleConnect();
+    }
+
+    /**
+     * Whether the SCTP association runs in-band (see {@see self::createInbandSctp()}).
+     */
+    public function isSctpInband(): bool
+    {
+        return $this->sctpInband;
+    }
+
+    /**
      * Creates an SCTP transport if none exists.
      *
      * @throws OpenSSLException
@@ -1149,7 +1206,7 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
             }
         }
 
-        if ($this->sctp && $this->sctp->getMid() === null) {
+        if ($this->sctp && !$this->sctpInband && $this->sctp->getMid() === null) {
             $sessionDescription->addMedia($this->createMediaDescriptionForSctp($this->getFreeMid($mids)));
         }
 
@@ -1840,7 +1897,17 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
             }
         }
 
-        if ($this->sctp) {
+        if ($this->sctp && $this->sctpInband) {
+            // The media transport is driven by the transceiver loop above; the association only
+            // has to be started on it. A server registers itself before the DTLS handshake is done
+            // (see the comment below for why), a client once the transport carries application data.
+            $dtlsTransport = $this->requireDtlsTransport($this->sctp->getDtlsTransport());
+            if (!$this->isClosed && $this->sctpRemotePort !== null
+                && ($this->sctp->isServer() || $dtlsTransport->getState() == TLSState::CONNECTED)
+            ) {
+                $this->sctp->start($this->sctpRemotePort);
+            }
+        } elseif ($this->sctp) {
             $dtlsTransport = $this->requireDtlsTransport($this->sctp->getDtlsTransport());
             $iceTransport = $this->requireIceTransport($dtlsTransport->getIceTransport());
             if ($iceTransport->getIceGatherer()->getLocalCandidates() && isset($this->remoteIceParameters[spl_object_id($this->sctp)])) {
