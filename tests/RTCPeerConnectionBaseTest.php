@@ -128,6 +128,8 @@ class RTCPeerConnectionBaseTest extends TestCase
         , 30.0);
         $this->assertEquals(IceConnectionState::completed, $pc1->getIceConnectionState());
         $this->assertEquals(IceConnectionState::completed, $pc2->getIceConnectionState());
+        $this->assertEquals(ConnectionState::connected, $pc1->getConnectionState());
+        $this->assertEquals(ConnectionState::connected, $pc2->getConnectionState());
     }
 
     protected function assertHasIceCandidates(RTCSessionDescription $description): void
