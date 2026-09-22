@@ -98,11 +98,14 @@ class RTCPeerConnectionBaseTest extends TestCase
         $detail = '';
         $transport = $dc->getTransport();
         if ($dc->getReadyState() !== State::Open && $transport instanceof \Webrtc\SCTP\RTCSctpTransport) {
+            $dtls = $transport->getDtlsTransport();
             $detail = sprintf(
-                ' (id=%s, sctp=%s, server=%s)',
+                ' (id=%s, sctp=%s, server=%s, dtls=%s, ice=%s)',
                 $dc->getId() === null ? 'null' : (string) $dc->getId(),
                 $transport->getState()->name,
                 $transport->isServer() ? 'yes' : 'no',
+                $dtls->getState()->name,
+                $dtls->getIceTransport()->getState()->name,
             );
         }
         $this->assertEquals(State::Open, $dc->getReadyState(), 'Data channel did not open' . $detail);

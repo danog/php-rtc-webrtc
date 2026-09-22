@@ -31,7 +31,7 @@
         "danog/php-rtc-exception": "^1.1.5",
         "danog/php-rtc-ice": "^1.1.18 || ^2.0",
         "danog/php-rtc-rtp": "^1.1.13 || ^2.0",
-        "danog/php-rtc-sctp": "^2.0.11",
+        "danog/php-rtc-sctp": "^2.0.12",
         "danog/php-rtc-stats": "^1.1.3",
         "danog/php-rtc-sdp": "^1.1.6",
         "danog/php-rtc-dtls": "^1.1.9 || ^2.0",
