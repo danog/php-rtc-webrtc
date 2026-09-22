@@ -92,7 +92,9 @@ class RTCPeerConnectionBaseTest extends TestCase
 
     protected function assertDataChannelOpen(RTCDataChannel $dc): void
     {
-        $this->waitUntil(fn() => $dc->getReadyState() === State::Open);
+        // SCTP INIT is retransmitted every 3s. A lost first INIT on a slow runner
+        // (seen on Windows) still leaves the channel Connecting after the default 5s.
+        $this->waitUntil(fn() => $dc->getReadyState() === State::Open, 20.0);
         $this->assertEquals(State::Open, $dc->getReadyState());
     }
 
