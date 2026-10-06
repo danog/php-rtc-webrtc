@@ -34,6 +34,13 @@ class RTCPeerConnectionHelper
     public static function createPeerConnection(null|array|RTCConfigurationInterface $configuration = null): RTCPeerConnection
     {
         $pc = new RTCPeerConnection($configuration);
+        $pc->setLogger(new class(\spl_object_id($pc)) extends \Psr\Log\AbstractLogger {
+            public function __construct(private int $id) {}
+            public function log($level, $message, array $context = []): void
+            {
+                fwrite(STDERR, sprintf("%.3f [pc%d] %s %s %s\n", microtime(true), $this->id, $level, $message, substr((string) json_encode(array_map(static fn ($v) => \is_scalar($v) ? $v : (\is_object($v) && method_exists($v, 'toString') ? $v->toString() : (\is_object($v) && method_exists($v, '__toString') ? (string) $v : get_debug_type($v))), $context)), 0, 300)));
+            }
+        });
         $listener = new class($pc) implements PeerConnectionTrackListener {
             public function __construct(private RTCPeerConnection $pc)
             {
