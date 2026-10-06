@@ -260,11 +260,15 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         $this->assertEquals($track2->getId(), $pc1Tracks[0]->getId());
 //
 //         check the outcome
+        fwrite(STDERR, "MARK before assertIceCompleted ".microtime(true)."\n");
         $this->assertIceCompleted($pc1, $pc2);
+        fwrite(STDERR, "MARK before delay ".microtime(true)."\n");
         // Allow media to flow before reading the stats back.
         delay(2);
+        fwrite(STDERR, "MARK before getStats ".microtime(true)."\n");
 
         $report = $pc1->getStats();
+        fwrite(STDERR, "MARK after getStats ".microtime(true)."\n");
 
         $this->assertInstanceOf(RTCStatsReport::class, $report);
         $this->assertEquals(
@@ -279,8 +283,11 @@ class RTCPeerConnectionAudioTest extends RTCPeerConnectionBaseTest
         );
 
         // close
+        fwrite(STDERR, "MARK before close ".microtime(true)."\n");
         $pc1->close();
+        fwrite(STDERR, "MARK after close1 ".microtime(true)."\n");
         $pc2->close();
+        fwrite(STDERR, "MARK after close2 ".microtime(true)."\n");
         $this->assertClosed($pc1);
         $this->assertClosed($pc2);
 
