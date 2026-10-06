@@ -39,6 +39,63 @@ class RTCPeerConnectionTrackAndTransceiverTest extends TestCase
         $pc->addIceCandidate($candidate);
     }
 
+    private static function hostCandidate(): RTCIceCandidate
+    {
+        $candidate = new RTCIceCandidate(1);
+        $candidate->setFoundation("0");
+        $candidate->setHost("192.168.1.2");
+        $candidate->setPort(33562);
+        $candidate->setPriority(1256445);
+        $candidate->setTransport(TransportType::udp);
+        $candidate->setType(CandidateType::host);
+        return $candidate;
+    }
+
+    public function testAddIceCandidateWithoutMatchingMediaSection()
+    {
+        $pc = new RTCPeerConnection();
+        $pc->addTransceiver(MediaKind::Audio);
+        $pc->createOffer();
+
+        // Rather than dropping it, which would leave ICE without anything to check.
+        $candidate = self::hostCandidate();
+        $candidate->setSdpMid(1234);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("No media section with mid 1234 for the candidate");
+        $pc->addIceCandidate($candidate);
+    }
+
+    public function testAddIceCandidateWithoutMatchingMediaSectionIndex()
+    {
+        $pc = new RTCPeerConnection();
+        $pc->addTransceiver(MediaKind::Audio);
+        $pc->createOffer();
+
+        $candidate = self::hostCandidate();
+        $candidate->setSdpMLineIndex(3);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("No media section at index 3 for the candidate");
+        $pc->addIceCandidate($candidate);
+    }
+
+    public function testAddIceCandidateByMediaSectionIndex()
+    {
+        $pc = new RTCPeerConnection();
+        $transceiver = $pc->addTransceiver(MediaKind::Audio);
+        $pc->setLocalDescription($pc->createOffer());
+        $this->assertNotNull($transceiver->getMid());
+
+        // Placed by its index when it has no mid, as when the mids of the parties differ.
+        $candidate = self::hostCandidate();
+        $candidate->setSdpMLineIndex(0);
+        $pc->addIceCandidate($candidate);
+
+        $remote = $transceiver->getDtlsTransport()->getIceTransport()->getRemoteCandidates();
+        $this->assertCount(1, $remote);
+        $this->assertSame("192.168.1.2", $remote[0]->getHost());
+        $pc->close();
+    }
+
     public function testAddTrackAudio()
     {
         $pc = new RTCPeerConnection();

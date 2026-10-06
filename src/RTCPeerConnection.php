@@ -628,22 +628,54 @@ final class RTCPeerConnection implements RTCPeerConnectionInterface, DataChannel
     #[Override]
     public function addIceCandidate(RTCIceCandidate $candidate): void
     {
-        if ($candidate->getSdpMid() === null && $candidate->getSdpMLineIndex() === null) {
+        $mid = $candidate->getSdpMid();
+        $index = $candidate->getSdpMLineIndex();
+        if ($mid === null && $index === null) {
             throw new InvalidArgumentException("Candidate must have either sdpMid or sdpMLineIndex");
         }
 
+        // As in WebRTC, the sdpMid identifies the media section, falling back to the sdpMLineIndex.
+        // A bundled media section already uses the transport of its BUNDLE group.
+        $dtlsTransport = $mid !== null ? $this->getDtlsTransportByMid($mid) : $this->getDtlsTransportByMLineIndex($index);
+        if ($dtlsTransport === null) {
+            // Dropping it would leave ICE without the remote candidate to check.
+            throw new InvalidArgumentException($mid !== null
+                ? "No media section with mid $mid for the candidate"
+                : "No media section at index $index for the candidate");
+        }
+        $dtlsTransport->getIceTransport()->addRemoteCandidate($candidate);
+    }
+
+    /**
+     * Gets the transport of the media section with the specified mid.
+     */
+    private function getDtlsTransportByMid(int $mid): ?RTCDtlsTransport
+    {
         foreach ($this->transceivers as $transceiver) {
-            if ($candidate->getSDPMid() == $transceiver->getMid() && !$transceiver->isBundled()) {
-                $iceTransport = $this->requireDtlsTransport($transceiver->getDtlsTransport())->getIceTransport();
-                $iceTransport->addRemoteCandidate($candidate);
-                return;
+            if ($transceiver->getMid() === (string) $mid) {
+                return $this->requireDtlsTransport($transceiver->getDtlsTransport());
             }
         }
-
-        if ($this->sctp && $candidate->getSDPMid() == $this->sctp->getMid() && !$this->sctp->isBundled()) {
-            $iceTransport = $this->requireDtlsTransport($this->sctp->getDtlsTransport())->getIceTransport();
-            $iceTransport->addRemoteCandidate($candidate);
+        if ($this->sctp && $this->sctp->getMid() === (string) $mid) {
+            return $this->requireDtlsTransport($this->sctp->getDtlsTransport());
         }
+        return null;
+    }
+
+    /**
+     * Gets the transport of the media section at the specified index.
+     */
+    private function getDtlsTransportByMLineIndex(int $index): ?RTCDtlsTransport
+    {
+        $transceiver = $this->getTransceiverByMLineIndex($index);
+        if ($transceiver !== null) {
+            return $this->requireDtlsTransport($transceiver->getDtlsTransport());
+        }
+        $description = $this->pendingRemoteDescription ?? $this->currentRemoteDescription;
+        if ($this->sctp && ($description?->getMedia()[$index] ?? null)?->getKind() === "application") {
+            return $this->requireDtlsTransport($this->sctp->getDtlsTransport());
+        }
+        return null;
     }
 
     /**

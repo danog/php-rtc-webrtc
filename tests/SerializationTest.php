@@ -105,7 +105,7 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
         $protocols = $this->nominatedProtocols($pc1);
         unset($pc1, $dc);
 
-        $this->reclaimPeer($protocols);
+        $this->reclaimPeer([$weak, ...$protocols]);
 
         $this->assertNull($weak->get(), 'the connected peer was pinned and not garbage-collected after unset');
         foreach ($protocols as $protocol) {
@@ -176,10 +176,12 @@ final class SerializationTest extends RTCPeerConnectionBaseTest
      * protocol is gone rather than draining for a fixed guess — bounded so a genuinely stuck fiber
      * fails the assertion below instead of hanging.
      *
-     * @param list<WeakReference<object>> $protocols
+     * @param list<WeakReference<object>> $objects The peer and its sockets
      */
-    private function reclaimPeer(array $protocols): void
+    private function reclaimPeer(array $objects): void
     {
+        // The peer itself is tracked too: its sockets don't own it, so they can be released before it.
+        $protocols = $objects;
         $deadline = microtime(true) + 5.0;
         do {
             while (gc_collect_cycles()) {
