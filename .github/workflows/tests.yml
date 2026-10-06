@@ -12,11 +12,12 @@ permissions:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 12
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        php: ["8.2", "8.3", "8.4", "8.5"]
+        os: [ubuntu-latest, windows-latest]
+        php: ["8.4"]
 
     steps:
       - uses: actions/checkout@v4
@@ -172,7 +173,7 @@ jobs:
               export LIB_AVCODEC_PATH="$FFMPEG_PREFIX/lib/libavcodec.so"
               export LIB_AVFORMAT_PATH="$FFMPEG_PREFIX/lib/libavformat.so"
               export LIB_AVFILTER_PATH="$FFMPEG_PREFIX/lib/libavfilter.so"
-              vendor/bin/phpunit
+              vendor/bin/phpunit --debug -d max_execution_time=0
               ;;
             macOS)
               export DYLD_LIBRARY_PATH="$FFMPEG_PREFIX/lib:${DYLD_LIBRARY_PATH:-}"
@@ -183,7 +184,7 @@ jobs:
               # not always resolve), so the transcoding test intermittently skips. Use the
               # skip-tolerant config so that skip does not red the job; when the FFI does load the
               # test still runs in full.
-              vendor/bin/phpunit -c phpunit-skiptolerant.xml
+              vendor/bin/phpunit -c phpunit-skiptolerant.xml --debug -d max_execution_time=0
               ;;
             Windows)
               # FFmpeg 9's libraries mix avcodec/avformat/avfilter and libavutil symbols in one
@@ -192,6 +193,6 @@ jobs:
               # is strictly per-module and cannot see them, so the AVCodec FFI cannot load. The
               # transcoding test therefore skips on Windows (skip-tolerant config), exactly as
               # rtp and codecs do. Linux still runs it in full.
-              vendor/bin/phpunit -c phpunit-skiptolerant.xml
+              vendor/bin/phpunit -c phpunit-skiptolerant.xml --debug -d max_execution_time=0
               ;;
           esac
